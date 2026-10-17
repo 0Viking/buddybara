@@ -1,0 +1,959 @@
+/* Buddy mode (buddy.ts): the panel beside the desktop Buddybara. Same palette and
+   type scale as the island (style.css :root); its chat bubbles, Markdown and
+   typing dots are the island's own (.chat-row, .bubble, .reply, .typing). */
+
+/* The whole window: the panel between two BUDDY_NECK margins (island.rs),
+   room for the funnel it pours out of Buddybara through (genie.ts). */
+#genie {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Pouring: the funnel's neck, in the margins, is the panel's own black, and
+   the panel shows whole wherever the funnel lets it. */
+#genie.pouring {
+  background: linear-gradient(to right, #0e0f11 40px, transparent 40px, transparent calc(100% - 40px), #0e0f11 calc(100% - 40px));
+}
+
+#genie.pouring #buddy {
+  opacity: 1;
+  transition: none;
+}
+
+#buddy {
+  position: absolute;
+  inset: 0 40px;
+  display: grid;
+  grid-template-columns: 172px 1fr;
+  background: #0e0f11;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+  pointer-events: none;
+}
+
+#buddy.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* ── Projects ─────────────────────────────────────────────────────────────── */
+
+.b-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.025);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.b-side-head,
+.b-menu-head {
+  padding: 16px 16px 8px;
+  font: 600 10.5px var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim-2);
+}
+
+.b-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+
+.b-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.b-add {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  cursor: default;
+}
+
+.b-add:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.b-new {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 4px;
+}
+
+.b-new.open {
+  display: flex;
+}
+
+.b-new-input {
+  padding: 7px 8px;
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: 400 12.5px var(--font);
+  outline: none;
+}
+
+.b-new-input::placeholder {
+  color: var(--dim-3);
+}
+
+.b-new-error {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(244, 80, 94, 0.12);
+  color: var(--red-text);
+  font: 400 11px var(--font);
+}
+
+.b-projects,
+.b-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.b-projects {
+  padding: 0 8px 12px;
+}
+
+.b-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #c8cdd4;
+  font: 400 12.5px var(--font);
+  text-align: left;
+  cursor: default;
+}
+
+.b-project:hover,
+.b-session:hover,
+.b-mode:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.b-project.on {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--ink);
+}
+
+.b-project-name,
+.b-title,
+.b-session-title,
+.b-session-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-project-name {
+  flex: 1 1 auto;
+}
+
+.b-count {
+  flex: 0 0 auto;
+  font: 500 10.5px var(--font);
+  color: var(--dim-3);
+}
+
+/* A run of ours at work in this project or session. */
+.b-live {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: b-live 1.4s ease-in-out infinite;
+}
+
+#buddy:not(.open) .b-live {
+  animation: none;
+}
+
+@keyframes b-live {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Unread news of a session (and of its project): done, failed, or waiting
+   for an answer. Gone once the session is opened. */
+.b-news {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green-2);
+}
+
+.b-news.error {
+  background: var(--red);
+}
+
+.b-news.input {
+  background: var(--amber);
+}
+
+/* ── Sidebar foot: Buddybara's settings ──────────────────────────────────────── */
+
+.b-side-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Bar and mode menu ────────────────────────────────────────────────────── */
+
+.b-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.b-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 8px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.b-title {
+  flex: 1 1 auto;
+  font: 600 13px var(--font);
+  color: var(--ink);
+}
+
+.b-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dim);
+  cursor: default;
+}
+
+.b-icon:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.b-icon.on,
+.b-icon.open {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
+.b-icon:disabled {
+  opacity: 0.35;
+  background: transparent;
+  color: var(--dim);
+}
+
+/* "Delete this conversation?", under the trash button. */
+.b-confirm {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 6;
+  width: 250px;
+  padding: 12px 12px 10px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  background: #1a1c20;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.b-confirm.open {
+  display: flex;
+}
+
+.b-confirm-title {
+  font: 600 12.5px var(--font);
+  color: var(--ink);
+}
+
+.b-confirm-about {
+  font: 400 11.5px var(--font);
+  color: var(--dim-2);
+}
+
+.b-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.b-confirm-actions button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  font: 500 12px var(--font);
+  cursor: default;
+}
+
+.b-confirm-no {
+  background: rgba(255, 255, 255, 0.07);
+  color: #c8cdd4;
+}
+
+.b-confirm-no:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+
+.b-confirm-yes {
+  background: rgba(244, 80, 94, 0.85);
+  color: #fff;
+}
+
+.b-confirm-yes:hover {
+  background: var(--red);
+}
+
+/* The terminal (terminal.ts) takes the conversation's place. */
+.b-term {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 6px 10px 12px;
+}
+
+.b-main.terming > .b-term {
+  display: block;
+}
+
+.b-main.terming > :is(.b-body, .b-card, .b-attach, .b-composer, .b-drop) {
+  display: none;
+}
+
+.b-term .xterm {
+  height: 100%;
+}
+
+.b-term .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.b-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c8cdd4;
+  font: 500 11.5px var(--font);
+  cursor: default;
+}
+
+.b-chip:hover,
+.b-chip.open {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+/* "Mode · Model · Ultracode" stays on one line. */
+.b-chip span {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-menu {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 5;
+  width: 300px;
+  max-height: calc(100% - 54px);
+  overflow-y: auto;
+  padding: 0 6px 6px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  background: #1a1c20;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.b-menu.open {
+  display: flex;
+}
+
+.b-menu > * {
+  flex-shrink: 0;
+}
+
+.b-menu-head {
+  padding: 10px 8px 6px;
+}
+
+.b-menu-head.sep {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.b-mode {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c8cdd4;
+  text-align: left;
+  cursor: default;
+}
+
+.b-mode.on {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.b-mode-name {
+  font: 500 12.5px var(--font);
+}
+
+.b-mode-about {
+  grid-column: 1;
+  font: 400 11px var(--font);
+  color: var(--dim-2);
+}
+
+.b-mode svg {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.b-effort {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 10px 10px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font: 500 12px var(--font);
+  color: #c8cdd4;
+}
+
+.b-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.b-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: default;
+}
+
+.b-dot.on {
+  background: var(--ink);
+}
+
+.b-ultra .switch {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.b-ultra.off {
+  opacity: 0.45;
+}
+
+.b-ultra.off:hover {
+  background: transparent;
+}
+
+/* ── Sessions and conversation ────────────────────────────────────────────── */
+
+.b-body {
+  padding: 8px 10px;
+}
+
+.b-hint {
+  margin: auto;
+  padding: 24px;
+  font: 400 12.5px var(--font);
+  color: var(--dim-3);
+  text-align: center;
+}
+
+.b-session {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  cursor: default;
+}
+
+.b-session-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* As wide as its text, so the rename pencil sits right after it; the time
+   keeps to the right edge. */
+.b-session-title {
+  flex: 0 1 auto;
+  font: 500 12.5px var(--font);
+  color: var(--ink-2);
+}
+
+.b-session-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font: 400 10.5px var(--font);
+  color: var(--dim-3);
+}
+
+.b-session-sub {
+  font: 400 11.5px var(--font);
+  color: var(--dim-2);
+}
+
+.b-rename {
+  flex: 0 0 auto;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -6px;
+  border-radius: 6px;
+  color: var(--dim-4);
+}
+
+.b-session:hover .b-rename {
+  color: var(--dim-2);
+}
+
+.b-session .b-rename:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.b-session.editing,
+.b-session.editing:hover {
+  background: transparent;
+}
+
+.b-session.editing {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.b-rename-count {
+  flex: 0 0 auto;
+  font: 400 10.5px var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--dim-3);
+}
+
+.b-rename-count.full {
+  color: var(--amber);
+}
+
+.b-rename-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim-2);
+  cursor: default;
+}
+
+.b-rename-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
+.b-rename-btn.ok {
+  color: var(--green-2);
+}
+
+.b-rename-btn.ok:hover {
+  background: rgba(52, 211, 153, 0.16);
+  color: var(--green-2);
+}
+
+.b-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid rgba(99, 102, 241, 0.6);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: 500 12.5px var(--font);
+}
+
+.b-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 8px;
+}
+
+.b-step {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+  font: 400 11px var(--mono);
+  color: var(--dim-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.b-error {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(244, 80, 94, 0.12);
+  color: var(--red-text);
+  font: 400 11.5px var(--font);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* What the user sent: the bubble, the files under it. */
+.b-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* A long link or word breaks onto the next line instead of running out of
+   the bubble (and the panel). */
+#buddy .bubble,
+#buddy .reply {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.b-files {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* Typed while Claude works: the next turn, waiting for this one to end. */
+.b-queued .bubble,
+.b-queued .b-file {
+  opacity: 0.55;
+}
+
+.b-queued-label {
+  font: 500 10px var(--font);
+  color: var(--dim-3);
+}
+
+/* ── Attachments ──────────────────────────────────────────────────────────── */
+
+.b-attach {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 10px 6px;
+}
+
+.b-attach.open {
+  display: flex;
+}
+
+.b-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #c8cdd4;
+  font: 500 11px var(--font);
+}
+
+.b-attach .b-file {
+  padding-right: 4px;
+}
+
+.b-attach .b-file.copying {
+  padding-right: 8px;
+  opacity: 0.5;
+}
+
+.b-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-file-x {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: default;
+}
+
+.b-file-x:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
+.b-attach-error {
+  align-self: center;
+  font: 400 11px var(--font);
+  color: var(--red-text);
+}
+
+.b-drop {
+  position: absolute;
+  inset: 8px;
+  z-index: 6;
+  display: none;
+  place-items: center;
+  border: 1.5px dashed rgba(129, 140, 248, 0.7);
+  border-radius: 14px;
+  background: rgba(14, 15, 17, 0.88);
+  pointer-events: none;
+}
+
+.b-drop.on {
+  display: grid;
+}
+
+.b-drop-text {
+  font: 500 13px var(--font);
+  color: var(--ink-2);
+}
+
+/* ── Permission and question card ─────────────────────────────────────────── */
+
+.b-card {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 165, 36, 0.35);
+  border-radius: 12px;
+  background: rgba(245, 165, 36, 0.07);
+}
+
+.b-card.open {
+  display: flex;
+}
+
+.b-card-head {
+  display: flex;
+  gap: 6px;
+  font: 400 11.5px var(--font);
+  color: var(--dim);
+}
+
+.b-card-who {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.b-card-cmd {
+  max-height: 96px;
+  overflow-y: auto;
+  font: 400 11.5px var(--mono);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+.b-card-text {
+  font: 500 12.5px var(--font);
+  color: var(--ink-2);
+}
+
+.b-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.b-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-2);
+  font: 500 12px var(--font);
+  cursor: default;
+}
+
+.b-btn:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.b-btn.primary {
+  background: var(--ink);
+  color: #0b0c0e;
+}
+
+.b-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.b-option {
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: transparent;
+  color: #c8cdd4;
+  font: 400 12px var(--font);
+  cursor: default;
+}
+
+.b-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.b-option.on {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(129, 140, 248, 0.6);
+  color: var(--ink);
+}
+
+/* ── Composer ─────────────────────────────────────────────────────────────── */
+
+.b-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 8px 8px 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+}
+
+.b-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 20px;
+  max-height: 120px;
+  padding: 3px 0;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 13px/1.45 var(--font);
+  outline: none;
+  cursor: text;
+  user-select: text;
+}
+
+.b-input::placeholder {
+  color: var(--dim-3);
+}
+
+.b-send {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #0b0c0e;
+  cursor: default;
+}
+
+.b-send.stop {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
