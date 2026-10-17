@@ -471,7 +471,10 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // Started again (its shortcut, while it already runs): the buddy
-            // answers by coming out.
+            // answers by coming out, above whatever covers him.
+            if let Some(buddy) = desktop::window(app) {
+                island::raise(&buddy);
+            }
             let _ = app.emit_to(island::WINDOW_LABEL, "tray", "relaunch".to_string());
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None));

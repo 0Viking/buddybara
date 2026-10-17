@@ -442,7 +442,7 @@ fn show(app: &AppHandle, d: &Desktop, at: (f64, f64)) {
         if !PARK {
             let _ = win.show();
         }
-        let _ = win.set_always_on_top(true);
+        island::raise(&win);
     }
     refresh(app, d);
     // The page draws only while he is on screen.

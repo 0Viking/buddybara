@@ -109,6 +109,14 @@ pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(WINDOW_LABEL)
 }
 
+/// Puts `win` back on top. A focused full-screen game ends up above even
+/// always-on-top windows, and asking for "always on top" again does nothing:
+/// tao only calls the OS when the flag changes. So the flag goes off and on.
+pub fn raise(win: &WebviewWindow) {
+    let _ = win.set_always_on_top(false);
+    let _ = win.set_always_on_top(true);
+}
+
 fn monitor_contains(m: &Monitor, x: f64, y: f64) -> bool {
     let p = m.position();
     let s = m.size();
@@ -266,6 +274,7 @@ fn place_panel(app: &AppHandle, collapsed: bool, following: bool) {
     let monitors = app.available_monitors().unwrap_or_default();
     // Only where he is on screen: parked off-screen, he is nowhere to open beside.
     let at = crate::desktop::shown_rect(app);
+    let buddy_shown = at.is_some();
     let monitor = at
         .and_then(|(x, y, w, h)| monitors.iter().find(|m| monitor_contains(m, x + w / 2.0, y + h / 2.0)).cloned())
         .or_else(|| app.primary_monitor().ok().flatten());
@@ -306,7 +315,14 @@ fn place_panel(app: &AppHandle, collapsed: bool, following: bool) {
         let _ = win.set_size(size);
     }
     if !following {
-        let _ = win.set_always_on_top(true);
+        // Asked for, so on top, and Buddybara with it: over a game he would
+        // otherwise stay hidden while his panel floats alone.
+        raise(&win);
+        if buddy_shown {
+            if let Some(buddy) = crate::desktop::window(app) {
+                raise(&buddy);
+            }
+        }
     }
 }
 
