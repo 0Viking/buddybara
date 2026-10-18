@@ -957,3 +957,285 @@
   background: rgba(255, 255, 255, 0.14);
   color: var(--ink);
 }
+
+/* ── Services (services.ts): a card per service, in place of a project ────── */
+
+.b-services {
+  margin: 10px 8px 0;
+}
+
+.b-services svg {
+  flex: 0 0 auto;
+  color: var(--dim);
+}
+
+.b-services.on svg {
+  color: var(--ink);
+}
+
+.s-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 16px;
+}
+
+.s-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.s-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.s-head b {
+  font: 600 12.5px var(--font);
+  color: var(--ink);
+}
+
+.s-glyph {
+  flex: 0 0 auto;
+}
+
+.s-letter {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  font: 700 9.5px var(--font);
+  font-style: normal;
+  color: #fff;
+}
+
+.s-kind {
+  flex: 1 1 auto;
+  font: 400 11px var(--font);
+  color: var(--dim-3);
+}
+
+.s-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim-3);
+}
+
+.s-icon:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.s-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 400 11.5px var(--font);
+  color: var(--dim-2);
+}
+
+.s-note.err {
+  color: var(--red-text);
+}
+
+.s-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8ab4f8;
+  font: 500 11.5px var(--font);
+  text-align: left;
+  word-break: break-all;
+}
+
+.s-link:hover {
+  text-decoration: underline;
+}
+
+.s-row,
+.s-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c8cdd4;
+  font: 400 12px var(--font);
+  text-align: left;
+}
+
+.s-click:hover,
+.s-stat.on {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.s-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-ago,
+.s-time,
+.s-ref,
+.s-dim {
+  flex: 0 0 auto;
+  font: 400 11px var(--font);
+  color: var(--dim-3);
+}
+
+.s-ref {
+  font-family: var(--mono);
+  color: var(--dim-2);
+}
+
+.s-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.s-amount {
+  flex: 0 0 auto;
+  font: 600 11.5px var(--font);
+  color: var(--green);
+}
+
+.s-amount.off {
+  color: var(--dim-3);
+  text-decoration: line-through;
+}
+
+.s-big {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 6px 4px;
+}
+
+.s-big span {
+  font: 600 20px var(--font);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.s-big i {
+  font: 500 11px var(--font);
+  font-style: normal;
+  color: var(--dim-3);
+}
+
+.s-mini {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.s-mini i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.s-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  font-style: normal;
+}
+
+.s-value {
+  flex: 0 0 auto;
+  font: 500 11.5px var(--font);
+  color: var(--ink);
+}
+
+.s-more,
+.s-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 4px 20px;
+}
+
+.s-badge {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 600 10.5px var(--font);
+}
+
+.s-text,
+.s-sub {
+  font: 400 11.5px var(--font);
+  color: var(--dim);
+}
+
+.s-sub {
+  margin: -2px 0 2px 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-emoji {
+  width: 14px;
+  text-align: center;
+}
+
+.s-gap {
+  width: 6px;
+  flex: 0 0 6px;
+}
+
+.s-pre {
+  margin: 2px 0 0 20px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  font: 400 11px/1.45 var(--mono);
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.s-grid {
+  display: flex;
+  gap: 1.5px;
+}
+
+.s-week {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+}
+
+.s-cell {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.s-cell.empty {
+  background: transparent;
+}

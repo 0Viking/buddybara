@@ -499,6 +499,22 @@ code,
   white-space: pre-line;
 }
 
+.stack.svc-keys {
+  padding-top: 0;
+  padding-left: 76px;
+}
+
+.svc-keys .row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 460px;
+}
+
+html[dir="rtl"] .stack.svc-keys {
+  padding-left: 18px;
+  padding-right: 76px;
+}
+
 /* ── Keys ────────────────────────────────────────────────────────────────── */
 
 .key {

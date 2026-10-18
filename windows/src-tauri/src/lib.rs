@@ -6,8 +6,10 @@ mod code;
 mod config_file;
 mod desktop;
 mod files;
+mod github;
 mod hooks;
 mod i18n;
+mod integrations;
 mod island;
 mod log;
 mod mcp;
@@ -95,6 +97,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
             eprintln!("[buddybara] autostart: {err}");
         }
     }
+    integrations::settings_saved(&app, &settings.active_integrations);
     if i18n::set_picked(&settings.language) {
         language_changed(&app);
     }
@@ -403,8 +406,35 @@ fn secret_present(key: String) -> bool {
 }
 
 #[tauri::command]
-fn secret_set(key: String, value: String) -> Result<(), String> {
-    secrets::set(&key, &value)
+fn secret_set(app: AppHandle, key: String, value: String) -> Result<(), String> {
+    let before = (key == "github-token").then(|| secrets::get(&key));
+    secrets::set(&key, &value)?;
+    // A new token answers for someone else: GitHub's card starts over.
+    if before.is_some_and(|before| secrets::get(&key) != before) {
+        integrations::github_token_changed(&app);
+    }
+    Ok(())
+}
+
+/// Opens the configured n8n instance — the URL lives in the Credential Manager.
+#[tauri::command]
+fn open_n8n() {
+    if let Some(url) = secrets::get("n8n-url") {
+        open_url(url);
+    }
+}
+
+/// The Refresh button of a Services card.
+#[tauri::command]
+async fn refresh_integration(app: AppHandle, id: String) {
+    integrations::poll_once(app, &id).await;
+}
+
+/// The GitHub card is on screen: refetch its `section` ("pulse" or "activity")
+/// if it is stale. The pollers still decline while GitHub is off.
+#[tauri::command]
+fn github_refresh(section: String) {
+    integrations::github_refresh_if_stale(&section);
 }
 
 /// Lets the island write to the same log as the Rust side.
@@ -552,6 +582,9 @@ pub fn run() {
             ingest_file,
             secret_present,
             secret_set,
+            open_n8n,
+            refresh_integration,
+            github_refresh,
             open_settings_window,
             desktop::desktop_buddybara_info,
             desktop::desktop_buddybara_drag_begin,
@@ -602,6 +635,7 @@ pub fn run() {
             log::line(format!("--- Buddybara {} started ---", env!("CARGO_PKG_VERSION")));
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
+            integrations::start(handle.clone());
             Ok(())
         })
         .build(tauri::generate_context!())

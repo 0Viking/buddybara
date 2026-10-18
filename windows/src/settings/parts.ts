@@ -3,6 +3,18 @@
 import { h, svg } from "../views/dom";
 import { BRANDS } from "./brands";
 
+/** An on / off switch. */
+export function toggle(on: boolean, onChange: (v: boolean) => void): HTMLElement {
+  const el = h("button", { class: on ? "switch on" : "switch", "aria-pressed": on });
+  el.addEventListener("click", () => {
+    const next = !el.classList.contains("on");
+    el.classList.toggle("on", next);
+    el.setAttribute("aria-pressed", String(next));
+    onChange(next);
+  });
+  return el;
+}
+
 /** A page: its title, a line about it, then its cards. */
 export function pageOf(title: string, intro: string | null, ...cards: HTMLElement[]): HTMLElement {
   return h("div", { class: "page" },
@@ -24,7 +36,8 @@ export function renderDiff(text: string): HTMLElement {
   return box;
 }
 
-function luminance(hex: string): number {
+/** A "#rrggbb" colour's relative luminance, 0 (black) to 1 (white). */
+export function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => {
     const c = parseInt(hex.slice(i, i + 2), 16) / 255;
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;

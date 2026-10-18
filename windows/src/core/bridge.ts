@@ -143,6 +143,14 @@ export const Bridge = {
   /** The Claude plan's windows as the account reports them (claude.rs plan_usage), or null. */
   claudePlanUsage: () => call<unknown>("claude_plan_usage"),
 
+  // ── Services: the integration pollers (src-tauri/src/integrations.rs) ─────
+  /** Polls one service now; its `integration` event follows. */
+  refreshIntegration: (id: string) => call<void>("refresh_integration", { id }),
+  /** The GitHub card is on screen: Rust refetches `section` if it is stale. */
+  githubRefresh: (section: "pulse" | "activity") => call<void>("github_refresh", { section }),
+  /** Opens the n8n instance whose address is in the Credential Manager. */
+  openN8n: () => call<void>("open_n8n"),
+
   // ── Connectors: Claude Code's MCP servers (src-tauri/src/mcp.rs) ──────────
   /** The catalog alone, at once (every state "missing"). */
   mcpCatalog: async () => (await call<McpEntry[]>("mcp_catalog")) ?? [],
@@ -257,6 +265,16 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+}
+
+/** One `integration` event (integrations.rs IntegrationUpdate). */
+export interface IntegrationUpdate {
+  /** "integration_stripe", "integration_github"… */
+  id: string;
+  data: Record<string, unknown>;
+  error: string | null;
+  /** Set only when something new happened: a deploy, a payment, a workflow run. */
+  event: { success: boolean; label: string; detail: string | null } | null;
 }
 
 /** An agent other than Claude Code, as Settings → Agents shows it (agents.rs AgentStatus). */

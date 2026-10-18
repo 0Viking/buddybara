@@ -31,6 +31,9 @@ import {
 } from "./run";
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
 import { BuddyTerminal, type TermTarget } from "./terminal";
+import {
+  enabledServices, refreshServiceKeys, servicesNews, servicesSeen, servicesVersion, servicesView, startServices,
+} from "./services";
 import "./buddy.css";
 
 /** The permission modes of the picker (never a bypass: code.rs refuses one). */
@@ -269,6 +272,9 @@ export class Buddy {
   private confirming = false;
   /** The terminal is on screen in place of the conversation. */
   private termShown = false;
+  /** The Services tab is on screen in place of a project. */
+  private services = false;
+  private servicesRow = h("button", { class: "b-project b-services" });
   private terminal = new BuddyTerminal(
     (target) => this.terminalEnded(target),
     () => this.hideTerminal(),
@@ -289,7 +295,7 @@ export class Buddy {
     const sideHead = h("div", { class: "b-side-head" }, h("span", { text: tl("Projects") }), headActions);
     const settingsBtn = h("button", { class: "b-icon", title: tl("Settings") }, svg(ICONS.gear, 14));
     const sideFoot = h("div", { class: "b-side-foot" }, settingsBtn);
-    const side = h("aside", { class: "b-side" }, sideHead, this.newRow, this.list, sideFoot);
+    const side = h("aside", { class: "b-side" }, this.servicesRow, sideHead, this.newRow, this.list, sideFoot);
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },
       bar, this.menu, this.confirm, this.body, this.terminal.el, this.card, this.files, this.composer, this.dropZone);
@@ -324,6 +330,7 @@ export class Buddy {
         this.render();
       }
     });
+    this.servicesRow.addEventListener("click", () => this.openServices());
     pickFolderBtn.addEventListener("click", () => void this.chooseFolder());
     addProjectBtn.addEventListener("click", () => this.startNewProject());
     settingsBtn.addEventListener("click", () => {
@@ -416,6 +423,11 @@ export class Buddy {
       minimize: () => this.minimize(),
     });
     State.subscribe(() => this.renderCard());
+    // A service switched on or off in Settings: its row and its card follow.
+    State.subscribe(() => {
+      this.renderServicesRow();
+      if (this.services) this.renderBody();
+    });
     // Folded, nothing in it can hold the keyboard or be pressed by a key.
     this.el.inert = true;
   }
@@ -427,6 +439,7 @@ export class Buddy {
     await logged("file drops", onDragDrop((e) => this.onDrag(e)));
     await logged("notifications", onEvent<HookNotice>("hook", (p) => this.onHook(p)));
     await logged("terminal", this.terminal.init());
+    startServices(() => this.render(), (good) => this.desktop.emote(good ? "happy" : "surprised"));
     // The whole window is the panel: it takes the mouse wherever it is shown.
     void Bridge.setIslandRect(BUDDY_NECK, 0, BUDDY_W, BUDDY_H);
     void Bridge.setCollapsed(true);
@@ -653,6 +666,7 @@ export class Buddy {
 
   private async pickProject(p: CodeProject) {
     this.leaveTerminal();
+    this.services = false;
     // A project picked while the name field is open with nothing in it: the field goes.
     if (document.activeElement !== this.newName && !this.newName.value.trim()) this.cancelNewProject();
     if (this.project?.path !== p.path) this.chat = null;
@@ -675,6 +689,7 @@ export class Buddy {
 
   private async openSession(project: CodeProject, id: string, title: string) {
     this.leaveTerminal();
+    this.services = false;
     this.project = project;
     // Opened: its dot goes, and its project's with the last one.
     this.seen(id);
@@ -720,6 +735,20 @@ export class Buddy {
       ?? { name: folderOf(task.sessionCwd), path: task.sessionCwd, sessions: 0, last: 0 };
     this.show(true);
     void this.openSession(project, task.sessionId, project.name);
+  }
+
+  /** The Services row: the services' cards in place of a project. */
+  private openServices() {
+    this.leaveTerminal();
+    this.cancelNewProject();
+    this.services = true;
+    this.project = null;
+    this.chat = null;
+    this.sessions = null;
+    this.notice = "";
+    servicesSeen();
+    void refreshServiceKeys();
+    this.render();
   }
 
   private newChat() {
@@ -1096,6 +1125,9 @@ export class Buddy {
   // ── Drawing ─────────────────────────────────────────────────────────────────
 
   private render() {
+    // News that comes in while the tab is on screen is seen at once.
+    if (this.services && this.shown && servicesNews()) servicesSeen();
+    this.renderServicesRow();
     this.renderNewProject();
     this.renderProjects();
     this.renderBar();
@@ -1142,9 +1174,25 @@ export class Buddy {
     });
   }
 
+  /** The Services row, there once a service is on, with a dot for news. */
+  private renderServicesRow() {
+    const shown = enabledServices().length > 0;
+    keyed(this.servicesRow, [shown, this.services, servicesNews()], () => {
+      clear(this.servicesRow);
+      this.servicesRow.style.display = shown ? "" : "none";
+      this.servicesRow.classList.toggle("on", this.services);
+      this.servicesRow.append(
+        svg(ICONS.grid, 12, { stroke: 1.8 }),
+        h("span", { class: "b-project-name", text: t("Services") }),
+        servicesNews() ? h("span", { class: servicesNews() === "bad" ? "b-news error" : "b-news" }) : "",
+      );
+    });
+  }
+
   private renderBar() {
     this.back.style.visibility = this.chat ? "visible" : "hidden";
-    this.title.textContent = this.chat?.title ?? this.project?.name ?? "";
+    this.title.textContent = this.services ? t("Services") : this.chat?.title ?? this.project?.name ?? "";
+    this.modeBtn.style.display = this.services ? "none" : "";
     keyed(this.modeBtn, [this.mode, this.model, this.ultracodeOn()], () => {
       clear(this.modeBtn);
       const mode = MODES.find((m) => m.id === this.mode) ?? MODES[0];
@@ -1160,6 +1208,7 @@ export class Buddy {
     this.termBtn.classList.toggle("on", this.termShown);
     this.termBtn.disabled = busy && !this.termShown;
     const deleting = chat?.id != null;
+    this.newBtn.style.display = this.services ? "none" : "";
     keyed(this.newBtn, [deleting], () => {
       clear(this.newBtn);
       this.newBtn.append(deleting ? svg(ICONS.trash, 14, { stroke: 1.8 }) : svg(ICONS.plus, 13));
@@ -1365,6 +1414,15 @@ export class Buddy {
 
   private renderBody() {
     const body = this.body;
+    if (this.services) {
+      this.drawn = null;
+      const ids = enabledServices().map((s) => s.id);
+      keyed(body, ["services", servicesVersion(), ids], () => {
+        clear(body);
+        body.append(...servicesView());
+      });
+      return;
+    }
     if (this.chat) {
       // Another conversation starts at its end; this one stays where the
       // reader is (the scroll listener keeps `pinned`).

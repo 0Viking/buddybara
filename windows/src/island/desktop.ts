@@ -104,6 +104,11 @@ export class DesktopLink {
     void Bridge.log("desktop Buddybara: could not fly out");
   }
 
+  /** An emote on the desktop Buddybara (a deploy that went out, a workflow that failed…). */
+  emote(emote: BotEmoteName, duration = 1.6) {
+    if (this.controller.phase === "onDesktop") void emitToWindow(WINDOW, DESKTOP_EVENTS.emote, { emote, duration });
+  }
+
   /** Buddybara started again: out he comes if he isn't on screen, else a wave says where he is. */
   async summon() {
     if (!this.supported) return;

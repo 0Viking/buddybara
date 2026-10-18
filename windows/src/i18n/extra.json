@@ -1167,17 +1167,6 @@
    "ru": "Установите хуки, чтобы видеть сессии Claude Code в компаньоне и одобрять разрешения, не отрываясь от дел.",
    "id": "Pasang hook untuk melihat sesi Claude Code Anda di buddy dan menyetujui izin tanpa meninggalkan pekerjaan Anda."
   },
-  "Lets Claude use gh and the GitHub API. A fine-grained token limited to the repositories you want is safest.": {
-   "zh-Hans": "让 Claude 可以使用 gh 和 GitHub API。仅限所需仓库的细粒度令牌最安全。",
-   "hi": "Claude को gh और GitHub API इस्तेमाल करने देता है। सिर्फ़ चुनी हुई रिपॉज़िटरी तक सीमित फाइन-ग्रेन्ड टोकन सबसे सुरक्षित है।",
-   "es": "Permite que Claude use gh y la API de GitHub. Lo más seguro es un token de grano fino limitado a los repositorios que quieras.",
-   "ar": "يتيح لـ Claude استخدام gh وواجهة GitHub البرمجية. الأكثر أمانًا رمز دقيق يقتصر على المستودعات التي تريدها.",
-   "fr": "Permet à Claude d'utiliser gh et l'API GitHub. Le plus sûr est un token à portée fine limité aux dépôts que tu veux.",
-   "bn": "Claude-কে gh ও GitHub API ব্যবহার করতে দেয়। শুধু আপনার পছন্দের রিপোজিটরিতে সীমিত ফাইন-গ্রেইনড টোকেনই সবচেয়ে নিরাপদ।",
-   "pt-BR": "Permite que o Claude use o gh e a API do GitHub. O mais seguro é um token fine-grained limitado aos repositórios que você quiser.",
-   "ru": "Позволяет Claude использовать gh и GitHub API. Безопаснее всего гранулярный токен, ограниченный нужными репозиториями.",
-   "id": "Memungkinkan Claude memakai gh dan GitHub API. Paling aman gunakan token fine-grained yang dibatasi ke repositori yang Anda inginkan."
-  },
   "From Obsidian's Local REST API plugin (Settings → Local REST API). Claude reaches your vault through it while Obsidian is open.": {
    "zh-Hans": "来自 Obsidian 的 Local REST API 插件（设置 → Local REST API）。Obsidian 打开时，Claude 通过它访问你的仓库。",
    "hi": "Obsidian के Local REST API प्लगइन से (सेटिंग्स → Local REST API)। Obsidian खुला रहने पर Claude इसी के ज़रिए आपके vault तक पहुंचता है।",
@@ -1485,17 +1474,6 @@
    "pt-BR": "Hooks",
    "ru": "Хуки",
    "id": "Hooks"
-  },
-  "Keys": {
-   "zh-Hans": "密钥",
-   "hi": "कुंजियां",
-   "es": "Claves",
-   "ar": "المفاتيح",
-   "fr": "Clés",
-   "bn": "কী",
-   "pt-BR": "Chaves",
-   "ru": "Ключи",
-   "id": "Kunci"
   },
   "Claude Code isn't installed: `claude` was not found.": {
    "zh-Hans": "未安装 Claude Code：找不到 `claude`。",
@@ -1848,6 +1826,662 @@
    "pt-BR": "Só atividade — as aprovações ficam no agente",
    "ru": "Только активность — подтверждения остаются в агенте",
    "id": "Hanya aktivitas — persetujuan tetap di agen"
+  },
+  "Payment": {
+   "zh-Hans": "付款",
+   "hi": "भुगतान",
+   "es": "Pago",
+   "ar": "دفعة",
+   "fr": "Paiement",
+   "bn": "পেমেন্ট",
+   "pt-BR": "Pagamento",
+   "ru": "Платёж",
+   "id": "Pembayaran"
+  },
+  "Nothing here": {
+   "zh-Hans": "这里没有内容",
+   "hi": "यहाँ कुछ नहीं",
+   "es": "Nada aquí",
+   "ar": "لا شيء هنا",
+   "fr": "Rien ici",
+   "bn": "এখানে কিছু নেই",
+   "pt-BR": "Nada aqui",
+   "ru": "Ничего нет",
+   "id": "Tidak ada apa-apa"
+  },
+  "Ready": {
+   "zh-Hans": "就绪",
+   "hi": "तैयार",
+   "es": "Listo",
+   "ar": "جاهز",
+   "fr": "Prêt",
+   "bn": "প্রস্তুত",
+   "pt-BR": "Pronto",
+   "ru": "Готово",
+   "id": "Siap"
+  },
+  "Canceled": {
+   "zh-Hans": "已取消",
+   "hi": "रद्द",
+   "es": "Cancelado",
+   "ar": "أُلغي",
+   "fr": "Annulé",
+   "bn": "বাতিল",
+   "pt-BR": "Cancelado",
+   "ru": "Отменено",
+   "id": "Dibatalkan"
+  },
+  "Error": {
+   "zh-Hans": "错误",
+   "hi": "त्रुटि",
+   "es": "Error",
+   "ar": "خطأ",
+   "fr": "Erreur",
+   "bn": "ত্রুটি",
+   "pt-BR": "Erro",
+   "ru": "Ошибка",
+   "id": "Galat"
+  },
+  "Emails": {
+   "zh-Hans": "邮件",
+   "hi": "ईमेल",
+   "es": "Correos",
+   "ar": "الإيميلات",
+   "fr": "Emails",
+   "bn": "ইমেইল",
+   "pt-BR": "Emails",
+   "ru": "Письма",
+   "id": "Email"
+  },
+  "Untitled": {
+   "zh-Hans": "无标题",
+   "hi": "बिना शीर्षक",
+   "es": "Sin título",
+   "ar": "بلا عنوان",
+   "fr": "Sans titre",
+   "bn": "শিরোনামহীন",
+   "pt-BR": "Sem título",
+   "ru": "Без названия",
+   "id": "Tanpa judul"
+  },
+  "No calls scheduled": {
+   "zh-Hans": "没有计划的通话",
+   "hi": "कोई कॉल निर्धारित नहीं",
+   "es": "Sin llamadas programadas",
+   "ar": "لا مكالمات مجدولة",
+   "fr": "Aucun appel prévu",
+   "bn": "কোনো কল নির্ধারিত নেই",
+   "pt-BR": "Nenhuma chamada agendada",
+   "ru": "Нет звонков",
+   "id": "Tidak ada panggilan terjadwal"
+  },
+  "Meeting": {
+   "zh-Hans": "会议",
+   "hi": "मीटिंग",
+   "es": "Reunión",
+   "ar": "اجتماع",
+   "fr": "Réunion",
+   "bn": "মিটিং",
+   "pt-BR": "Reunião",
+   "ru": "Встреча",
+   "id": "Rapat"
+  },
+  "Success": {
+   "zh-Hans": "成功",
+   "hi": "सफलता",
+   "es": "Éxito",
+   "ar": "نجاح",
+   "fr": "Réussi",
+   "bn": "সফল",
+   "pt-BR": "Sucesso",
+   "ru": "Успешно",
+   "id": "Berhasil"
+  },
+  "Failed": {
+   "zh-Hans": "失败",
+   "hi": "विफल",
+   "es": "Fallido",
+   "ar": "فشل",
+   "fr": "Échoué",
+   "bn": "ব্যর্থ",
+   "pt-BR": "Falhou",
+   "ru": "Ошибка",
+   "id": "Gagal"
+  },
+  "Completed successfully.": {
+   "zh-Hans": "已成功完成。",
+   "hi": "सफलतापूर्वक पूर्ण हुआ।",
+   "es": "Completado con éxito.",
+   "ar": "اكتمل بنجاح.",
+   "fr": "Terminé avec succès.",
+   "bn": "সফলভাবে সম্পন্ন।",
+   "pt-BR": "Concluído com sucesso.",
+   "ru": "Завершено успешно.",
+   "id": "Selesai dengan berhasil."
+  },
+  "No error details available.": {
+   "zh-Hans": "无错误详情。",
+   "hi": "कोई त्रुटि विवरण उपलब्ध नहीं है।",
+   "es": "No hay detalles del error disponibles.",
+   "ar": "لا توجد تفاصيل للخطأ.",
+   "fr": "Aucun détail d'erreur disponible.",
+   "bn": "কোনো ত্রুটির বিবরণ পাওয়া যায়নি।",
+   "pt-BR": "Nenhum detalhe de erro disponível.",
+   "ru": "Нет подробностей об ошибке.",
+   "id": "Tidak ada detail kesalahan yang tersedia."
+  },
+  "Open {name}": {
+   "zh-Hans": "打开 {name}",
+   "hi": "{name} खोलें",
+   "es": "Abrir {name}",
+   "ar": "فتح {name}",
+   "fr": "Ouvrir {name}",
+   "bn": "{name} খুলুন",
+   "pt-BR": "Abrir {name}",
+   "ru": "Открыть {name}",
+   "id": "Buka {name}"
+  },
+  "Overview": {
+   "zh-Hans": "概览",
+   "hi": "अवलोकन",
+   "es": "Resumen",
+   "ar": "نظرة عامة",
+   "fr": "Aperçu",
+   "bn": "সংক্ষিপ্ত বিবরণ",
+   "pt-BR": "Visão geral",
+   "ru": "Обзор",
+   "id": "Ikhtisar"
+  },
+  "Total stars": {
+   "zh-Hans": "星标总数",
+   "hi": "कुल स्टार",
+   "es": "Estrellas totales",
+   "ar": "إجمالي النجوم",
+   "fr": "Étoiles au total",
+   "bn": "মোট স্টার",
+   "pt-BR": "Total de estrelas",
+   "ru": "Всего звёзд",
+   "id": "Total bintang"
+  },
+  "Repositories": {
+   "zh-Hans": "仓库",
+   "hi": "रिपॉज़िटरी",
+   "es": "Repositorios",
+   "ar": "المستودعات",
+   "fr": "Dépôts",
+   "bn": "রিপোজিটরি",
+   "pt-BR": "Repositórios",
+   "ru": "Репозитории",
+   "id": "Repositori"
+  },
+  "My PRs": {
+   "zh-Hans": "我的 PR",
+   "hi": "मेरे PR",
+   "es": "Mis PRs",
+   "ar": "طلبات السحب",
+   "fr": "Mes PRs",
+   "bn": "আমার PR",
+   "pt-BR": "Meus PRs",
+   "ru": "Мои PR",
+   "id": "PR saya"
+  },
+  "To review": {
+   "zh-Hans": "待审查",
+   "hi": "समीक्षा के लिए",
+   "es": "Para revisar",
+   "ar": "للمراجعة",
+   "fr": "À relire",
+   "bn": "পর্যালোচনার জন্য",
+   "pt-BR": "Para revisar",
+   "ru": "На ревью",
+   "id": "Untuk ditinjau"
+  },
+  "Default branch CI": {
+   "zh-Hans": "默认分支 CI",
+   "hi": "डिफ़ॉल्ट ब्रांच CI",
+   "es": "CI de la rama principal",
+   "ar": "CI للفرع الافتراضي",
+   "fr": "CI de la branche par défaut",
+   "bn": "ডিফল্ট ব্রাঞ্চ CI",
+   "pt-BR": "CI do branch padrão",
+   "ru": "CI основной ветки",
+   "id": "CI cabang utama"
+  },
+  "Activity": {
+   "zh-Hans": "动态",
+   "hi": "गतिविधि",
+   "es": "Actividad",
+   "ar": "النشاط",
+   "fr": "Activité",
+   "bn": "কার্যকলাপ",
+   "pt-BR": "Atividade",
+   "ru": "Активность",
+   "id": "Aktivitas"
+  },
+  "Draft": {
+   "zh-Hans": "草稿",
+   "hi": "ड्राफ्ट",
+   "es": "Borrador",
+   "ar": "مسودة",
+   "fr": "Brouillon",
+   "bn": "ড্রাফ্ট",
+   "pt-BR": "Rascunho",
+   "ru": "Черновик",
+   "id": "Draf"
+  },
+  "failing": {
+   "zh-Hans": "失败",
+   "hi": "विफल",
+   "es": "con fallos",
+   "ar": "فاشل",
+   "fr": "en échec",
+   "bn": "ব্যর্থ",
+   "pt-BR": "falhando",
+   "ru": "с ошибками",
+   "id": "gagal"
+  },
+  "running": {
+   "zh-Hans": "运行中",
+   "hi": "चल रहा है",
+   "es": "en curso",
+   "ar": "قيد التشغيل",
+   "fr": "en cours",
+   "bn": "চলছে",
+   "pt-BR": "em execução",
+   "ru": "выполняется",
+   "id": "berjalan"
+  },
+  "passing": {
+   "zh-Hans": "通过",
+   "hi": "सफल",
+   "es": "correcto",
+   "ar": "ناجح",
+   "fr": "réussi",
+   "bn": "সফল",
+   "pt-BR": "passando",
+   "ru": "успешно",
+   "id": "lulus"
+  },
+  "all green": {
+   "zh-Hans": "全部通过",
+   "hi": "सब हरा",
+   "es": "todo en verde",
+   "ar": "كلها خضراء",
+   "fr": "tout est vert",
+   "bn": "সব সবুজ",
+   "pt-BR": "tudo verde",
+   "ru": "всё зелёное",
+   "id": "semua hijau"
+  },
+  "no repos": {
+   "zh-Hans": "没有仓库",
+   "hi": "कोई रिपॉज़िटरी नहीं",
+   "es": "sin repositorios",
+   "ar": "لا مستودعات",
+   "fr": "aucun dépôt",
+   "bn": "কোনো রিপোজিটরি নেই",
+   "pt-BR": "nenhum repositório",
+   "ru": "нет репозиториев",
+   "id": "tidak ada repositori"
+  },
+  "unknown": {
+   "zh-Hans": "未知",
+   "hi": "अज्ञात",
+   "es": "desconocido",
+   "ar": "غير معروف",
+   "fr": "inconnu",
+   "bn": "অজানা",
+   "pt-BR": "desconhecido",
+   "ru": "неизвестно",
+   "id": "tidak diketahui"
+  },
+  "No contributions": {
+   "zh-Hans": "没有贡献",
+   "hi": "कोई योगदान नहीं",
+   "es": "Sin contribuciones",
+   "ar": "لا مساهمات",
+   "fr": "Aucune contribution",
+   "bn": "কোনো অবদান নেই",
+   "pt-BR": "Sem contribuições",
+   "ru": "Нет вкладов",
+   "id": "Tidak ada kontribusi"
+  },
+  "{total} past year": {
+   "zh-Hans": "过去一年 {total}",
+   "hi": "पिछले वर्ष {total}",
+   "es": "{total} el último año",
+   "ar": "{total} في العام الماضي",
+   "fr": "{total} sur un an",
+   "bn": "গত বছরে {total}",
+   "pt-BR": "{total} no último ano",
+   "ru": "{total} за год",
+   "id": "{total} setahun terakhir"
+  },
+  "{count} contributions": {
+   "zh-Hans": {
+    "other": "{count} 次贡献"
+   },
+   "hi": {
+    "one": "{count} योगदान",
+    "other": "{count} योगदान"
+   },
+   "es": {
+    "one": "{count} contribución",
+    "other": "{count} contribuciones"
+   },
+   "ar": {
+    "zero": "{count} مساهمة",
+    "one": "مساهمة واحدة",
+    "two": "مساهمتان",
+    "few": "{count} مساهمات",
+    "many": "{count} مساهمة",
+    "other": "{count} مساهمة"
+   },
+   "fr": {
+    "one": "{count} contribution",
+    "other": "{count} contributions"
+   },
+   "bn": {
+    "one": "{count}টি অবদান",
+    "other": "{count}টি অবদান"
+   },
+   "pt-BR": {
+    "one": "{count} contribuição",
+    "other": "{count} contribuições"
+   },
+   "ru": {
+    "one": "{count} вклад",
+    "few": "{count} вклада",
+    "many": "{count} вкладов",
+    "other": "{count} вклада"
+   },
+   "id": {
+    "other": "{count} kontribusi"
+   }
+  },
+  "{count} repos": {
+   "zh-Hans": {
+    "other": "{count} 个仓库"
+   },
+   "hi": {
+    "one": "{count} रिपॉज़िटरी",
+    "other": "{count} रिपॉज़िटरी"
+   },
+   "es": {
+    "one": "{count} repositorio",
+    "other": "{count} repositorios"
+   },
+   "ar": {
+    "zero": "{count} مستودع",
+    "one": "مستودع واحد",
+    "two": "مستودعان",
+    "few": "{count} مستودعات",
+    "many": "{count} مستودعًا",
+    "other": "{count} مستودع"
+   },
+   "fr": {
+    "one": "{count} dépôt",
+    "other": "{count} dépôts"
+   },
+   "bn": {
+    "one": "{count}টি রিপোজিটরি",
+    "other": "{count}টি রিপোজিটরি"
+   },
+   "pt-BR": {
+    "one": "{count} repositório",
+    "other": "{count} repositórios"
+   },
+   "ru": {
+    "one": "{count} репозиторий",
+    "few": "{count} репозитория",
+    "many": "{count} репозиториев",
+    "other": "{count} репозитория"
+   },
+   "id": {
+    "other": "{count} repositori"
+   }
+  },
+  "Payments": {
+   "zh-Hans": "付款",
+   "hi": "भुगतान",
+   "es": "Pagos",
+   "ar": "المدفوعات",
+   "fr": "Paiements",
+   "bn": "পেমেন্ট",
+   "pt-BR": "Pagamentos",
+   "ru": "Платежи",
+   "id": "Pembayaran"
+  },
+  "Secret key": {
+   "zh-Hans": "私密密钥",
+   "hi": "सीक्रेट कुंजी",
+   "es": "Clave secreta",
+   "ar": "المفتاح السري",
+   "fr": "Clé secrète",
+   "bn": "সিক্রেট কী",
+   "pt-BR": "Chave secreta",
+   "ru": "Секретный ключ",
+   "id": "Kunci rahasia"
+  },
+  "Deployments": {
+   "zh-Hans": "部署",
+   "hi": "तैनाती",
+   "es": "Despliegues",
+   "ar": "نشر",
+   "fr": "Déploiements",
+   "bn": "ডিপ্লয়মেন্ট",
+   "pt-BR": "Implantações",
+   "ru": "Деплои",
+   "id": "Penerapan"
+  },
+  "Workflow": {
+   "zh-Hans": "工作流",
+   "hi": "वर्कफ़्लो",
+   "es": "Flujo de trabajo",
+   "ar": "سير العمل",
+   "fr": "Workflow",
+   "bn": "ওয়ার্কফ্লো",
+   "pt-BR": "Fluxo de trabalho",
+   "ru": "Сценарий",
+   "id": "Alur kerja"
+  },
+  "Instance URL": {
+   "zh-Hans": "实例地址",
+   "hi": "इंस्टेंस URL",
+   "es": "URL de la instancia",
+   "ar": "عنوان المثيل",
+   "fr": "URL de l'instance",
+   "bn": "ইনস্ট্যান্স URL",
+   "pt-BR": "URL da instância",
+   "ru": "URL экземпляра",
+   "id": "URL instans"
+  },
+  "Recent": {
+   "zh-Hans": "最近",
+   "hi": "हाल का",
+   "es": "Reciente",
+   "ar": "الأخيرة",
+   "fr": "Récent",
+   "bn": "সাম্প্রতিক",
+   "pt-BR": "Recente",
+   "ru": "Недавние",
+   "id": "Terbaru"
+  },
+  "Integration token": {
+   "zh-Hans": "集成令牌",
+   "hi": "इंटीग्रेशन टोकन",
+   "es": "Token de integración",
+   "ar": "رمز التكامل",
+   "fr": "Jeton d'intégration",
+   "bn": "ইন্টিগ্রেশন টোকেন",
+   "pt-BR": "Token de integração",
+   "ru": "Токен интеграции",
+   "id": "Token integrasi"
+  },
+  "Schedule": {
+   "zh-Hans": "日程",
+   "hi": "शेड्यूल",
+   "es": "Horario",
+   "ar": "الجدول",
+   "fr": "Agenda",
+   "bn": "সময়সূচি",
+   "pt-BR": "Agenda",
+   "ru": "Расписание",
+   "id": "Jadwal"
+  },
+  "Invalid API key (401)": {
+   "zh-Hans": "API 密钥无效（401）",
+   "hi": "अमान्य API कुंजी (401)",
+   "es": "Clave de API no válida (401)",
+   "ar": "مفتاح API غير صالح (401)",
+   "fr": "Clé d'API invalide (401)",
+   "bn": "অবৈধ API কী (401)",
+   "pt-BR": "Chave de API inválida (401)",
+   "ru": "Неверный API-ключ (401)",
+   "id": "Kunci API tidak valid (401)"
+  },
+  "API error {code}": {
+   "zh-Hans": "API 错误 {code}",
+   "hi": "API त्रुटि {code}",
+   "es": "Error de API {code}",
+   "ar": "خطأ في الواجهة البرمجية {code}",
+   "fr": "Erreur d'API {code}",
+   "bn": "API ত্রুটি {code}",
+   "pt-BR": "Erro de API {code}",
+   "ru": "Ошибка API {code}",
+   "id": "Galat API {code}"
+  },
+  "Use a secret key (sk_live_… not pk_live_…)": {
+   "zh-Hans": "请使用私密密钥（sk_live_…，而不是 pk_live_…）",
+   "hi": "सीक्रेट कुंजी का उपयोग करें (sk_live_…, pk_live_… नहीं)",
+   "es": "Usa una clave secreta (sk_live_…, no pk_live_…)",
+   "ar": "استخدم مفتاحًا سريًا (sk_live_… وليس pk_live_…)",
+   "fr": "Utilise une clé secrète (sk_live_…, pas pk_live_…)",
+   "bn": "সিক্রেট কী ব্যবহার করুন (sk_live_…, pk_live_… নয়)",
+   "pt-BR": "Use uma chave secreta (sk_live_…, não pk_live_…)",
+   "ru": "Используйте секретный ключ (sk_live_…, а не pk_live_…)",
+   "id": "Gunakan kunci rahasia (sk_live_…, bukan pk_live_…)"
+  },
+  "No connection: {error}": {
+   "zh-Hans": "无连接：{error}",
+   "hi": "कोई कनेक्शन नहीं: {error}",
+   "es": "Sin conexión: {error}",
+   "ar": "لا يوجد اتصال: {error}",
+   "fr": "Pas de connexion : {error}",
+   "bn": "সংযোগ নেই: {error}",
+   "pt-BR": "Sem conexão: {error}",
+   "ru": "Нет соединения: {error}",
+   "id": "Tidak ada koneksi: {error}"
+  },
+  "Token lacks the needed scope": {
+   "zh-Hans": "令牌缺少所需的权限范围",
+   "hi": "टोकन में ज़रूरी स्कोप नहीं है",
+   "es": "Al token le falta el alcance necesario",
+   "ar": "يفتقر الرمز إلى النطاق المطلوب",
+   "fr": "Il manque au jeton la portée nécessaire",
+   "bn": "টোকেনে প্রয়োজনীয় স্কোপ নেই",
+   "pt-BR": "Falta ao token o escopo necessário",
+   "ru": "У токена нет нужной области доступа",
+   "id": "Token tidak memiliki cakupan yang diperlukan"
+  },
+  "Token lacks access": {
+   "zh-Hans": "令牌没有访问权限",
+   "hi": "टोकन के पास पहुँच नहीं है",
+   "es": "El token no tiene acceso",
+   "ar": "الرمز لا يملك صلاحية الوصول",
+   "fr": "Le jeton n'a pas l'accès",
+   "bn": "টোকেনের অ্যাক্সেস নেই",
+   "pt-BR": "O token não tem acesso",
+   "ru": "У токена нет доступа",
+   "id": "Token tidak punya akses"
+  },
+  "Key lacks access": {
+   "zh-Hans": "密钥没有访问权限",
+   "hi": "कुंजी के पास पहुँच नहीं है",
+   "es": "La clave no tiene acceso",
+   "ar": "المفتاح لا يملك صلاحية الوصول",
+   "fr": "La clé n'a pas l'accès",
+   "bn": "কী-এর অ্যাক্সেস নেই",
+   "pt-BR": "A chave não tem acesso",
+   "ru": "У ключа нет доступа",
+   "id": "Kunci tidak punya akses"
+  },
+  "Integration lacks access": {
+   "zh-Hans": "集成没有访问权限",
+   "hi": "इंटीग्रेशन के पास पहुँच नहीं है",
+   "es": "La integración no tiene acceso",
+   "ar": "التكامل لا يملك صلاحية الوصول",
+   "fr": "L'intégration n'a pas l'accès",
+   "bn": "ইন্টিগ্রেশনের অ্যাক্সেস নেই",
+   "pt-BR": "A integração não tem acesso",
+   "ru": "У интеграции нет доступа",
+   "id": "Integrasi tidak punya akses"
+  },
+  "No new runs yet: the next one shows here.": {
+   "zh-Hans": "还没有新的运行：下一次会显示在这里。",
+   "hi": "अभी कोई नया रन नहीं: अगला यहाँ दिखेगा।",
+   "es": "Aún no hay ejecuciones nuevas: la próxima aparecerá aquí.",
+   "ar": "لا توجد عمليات تشغيل جديدة بعد: ستظهر التالية هنا.",
+   "fr": "Pas encore de nouvelle exécution : la prochaine s'affichera ici.",
+   "bn": "এখনো নতুন কোনো রান নেই: পরেরটি এখানে দেখা যাবে।",
+   "pt-BR": "Nenhuma execução nova ainda: a próxima aparece aqui.",
+   "ru": "Новых запусков пока нет: следующий появится здесь.",
+   "id": "Belum ada eksekusi baru: yang berikutnya muncul di sini."
+  },
+  "Add its key in Settings → Integrations.": {
+   "zh-Hans": "请在“设置 → 集成”中添加它的密钥。",
+   "hi": "इसकी कुंजी सेटिंग्स → एकीकरण में जोड़ें।",
+   "es": "Añade su clave en Configuración → Integraciones.",
+   "ar": "أضف مفتاحه في الإعدادات ← التكاملات.",
+   "fr": "Ajoute sa clé dans Réglages → Intégrations.",
+   "bn": "সেটিংস → ইন্টিগ্রেশন-এ এর কী যোগ করুন।",
+   "pt-BR": "Adicione a chave em Configurações → Integrações.",
+   "ru": "Добавьте ключ в разделе Настройки → Интеграции.",
+   "id": "Tambahkan kuncinya di Pengaturan → Integrasi."
+  },
+  "Switch services on in Settings → Integrations.": {
+   "zh-Hans": "请在“设置 → 集成”中开启服务。",
+   "hi": "सेटिंग्स → एकीकरण में सेवाएँ चालू करें।",
+   "es": "Activa servicios en Configuración → Integraciones.",
+   "ar": "فعّل الخدمات من الإعدادات ← التكاملات.",
+   "fr": "Active des services dans Réglages → Intégrations.",
+   "bn": "সেটিংস → ইন্টিগ্রেশন-এ পরিষেবাগুলো চালু করুন।",
+   "pt-BR": "Ative serviços em Configurações → Integrações.",
+   "ru": "Включите сервисы в разделе Настройки → Интеграции.",
+   "id": "Aktifkan layanan di Pengaturan → Integrasi."
+  },
+  "Keys for Claude": {
+   "zh-Hans": "给 Claude 的密钥",
+   "hi": "Claude के लिए कुंजियां",
+   "es": "Claves para Claude",
+   "ar": "مفاتيح لـ Claude",
+   "fr": "Clés pour Claude",
+   "bn": "Claude-এর জন্য কী",
+   "pt-BR": "Chaves para o Claude",
+   "ru": "Ключи для Claude",
+   "id": "Kunci untuk Claude"
+  },
+  "Live status from the services you use, in the buddy's Services tab. Their keys stay in the {store}, never on disk.": {
+   "zh-Hans": "你所用服务的实时状态，显示在小伙伴的“服务”标签页中。它们的密钥保存在 {store} 中，绝不写入磁盘。",
+   "hi": "आपकी सेवाओं की लाइव स्थिति, बडी के “सेवाएँ” टैब में। उनकी कुंजियां {store} में रहती हैं, कभी डिस्क पर नहीं।",
+   "es": "El estado en directo de los servicios que usas, en la pestaña «Servicios» del compañero. Sus claves se guardan en {store}, nunca en el disco.",
+   "ar": "الحالة المباشرة للخدمات التي تستخدمها، في تبويب «الخدمات» لدى الرفيق. تبقى مفاتيحها في {store}، ولا تُكتب على القرص أبدًا.",
+   "fr": "L'état en direct des services que tu utilises, dans l'onglet « Services » du compagnon. Leurs clés restent dans {store}, jamais sur le disque.",
+   "bn": "আপনার ব্যবহৃত পরিষেবাগুলোর লাইভ অবস্থা, বাডির “পরিষেবা” ট্যাবে। এগুলোর কী {store}-এ থাকে, কখনো ডিস্কে নয়।",
+   "pt-BR": "O status ao vivo dos serviços que você usa, na aba “Serviços” do companheiro. As chaves ficam no {store}, nunca no disco.",
+   "ru": "Состояние ваших сервисов в реальном времени — на вкладке «Сервисы» компаньона. Их ключи хранятся в {store}, а не на диске.",
+   "id": "Status langsung layanan yang Anda pakai, di tab “Layanan” buddy. Kuncinya tetap di {store}, tidak pernah di disk."
+  },
+  "Classic token with the repo scope, or fine-grained with read access to Pull requests, Commit statuses and Actions. Claude's runs get it too, for gh and the GitHub API.": {
+   "zh-Hans": "带 repo 权限范围的经典令牌，或对 Pull requests、Commit statuses 和 Actions 具有读取权限的细粒度令牌。Claude 的运行也会获得它，用于 gh 和 GitHub API。",
+   "hi": "repo स्कोप वाला क्लासिक टोकन, या Pull requests, Commit statuses और Actions पर पढ़ने की अनुमति वाला fine-grained टोकन। Claude के रन को भी यह मिलता है, gh और GitHub API के लिए।",
+   "es": "Token clásico con el alcance repo, o detallado (fine-grained) con acceso de lectura a Pull requests, Commit statuses y Actions. Las ejecuciones de Claude también lo reciben, para gh y la API de GitHub.",
+   "ar": "رمز كلاسيكي بنطاق repo، أو رمز دقيق الصلاحيات مع إذن قراءة لـ Pull requests وCommit statuses وActions. وتحصل عليه أيضًا عمليات تشغيل Claude، لاستخدام gh وواجهة GitHub البرمجية.",
+   "fr": "Jeton classique avec la portée repo, ou à granularité fine avec un accès en lecture aux Pull requests, Commit statuses et Actions. Les exécutions de Claude le reçoivent aussi, pour gh et l'API GitHub.",
+   "bn": "repo স্কোপসহ ক্লাসিক টোকেন, অথবা Pull requests, Commit statuses ও Actions-এ পড়ার অনুমতিসহ fine-grained টোকেন। Claude-এর রানগুলোও এটি পায়, gh ও GitHub API-এর জন্য।",
+   "pt-BR": "Token clássico com o escopo repo, ou refinado (fine-grained) com acesso de leitura a Pull requests, Commit statuses e Actions. As execuções do Claude também o recebem, para o gh e a API do GitHub.",
+   "ru": "Классический токен с областью repo или детализированный (fine-grained) с доступом на чтение к Pull requests, Commit statuses и Actions. Запуски Claude тоже его получают — для gh и GitHub API.",
+   "id": "Token klasik dengan cakupan repo, atau fine-grained dengan akses baca ke Pull requests, Commit statuses, dan Actions. Proses Claude juga mendapatkannya, untuk gh dan GitHub API."
   }
  }
 }

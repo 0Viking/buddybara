@@ -8,9 +8,10 @@ import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { SOUND_NAMES } from "../core/sound";
 import { BotEngine } from "../buddybara/engine";
 import { h, clear, svg } from "../views/dom";
-import { pageOf, renderDiff, statusDot } from "./parts";
+import { pageOf, renderDiff, statusDot, toggle } from "./parts";
 import { agentsPage } from "./agents";
 import { connectorsPage } from "./connectors";
+import { INTEGRATION_KEYS, integrationsPage } from "./integrations";
 import {
   LANGUAGES, N_, isRtl, onLanguageChange, resolveLanguage, setLanguage, systemLanguages, t,
 } from "../i18n/i18n";
@@ -25,17 +26,6 @@ async function save() {
 }
 
 // ── Reusable bits ─────────────────────────────────────────────────────────────
-
-function toggle(on: boolean, onChange: (v: boolean) => void): HTMLElement {
-  const el = h("button", { class: on ? "switch on" : "switch", "aria-pressed": on });
-  el.addEventListener("click", () => {
-    const next = !el.classList.contains("on");
-    el.classList.toggle("on", next);
-    el.setAttribute("aria-pressed", String(next));
-    onChange(next);
-  });
-  return el;
-}
 
 /** A setting: its name and what it does on the left, its controls on the right. */
 function srow(title: string | null, hint: string | null, ...controls: (Node | null)[]): HTMLElement {
@@ -332,72 +322,6 @@ function claudePage(status: HookStatus): HTMLElement {
   return pageOf("Claude Code", null, hooksCard(status), planCard(status));
 }
 
-// ── Keys page ─────────────────────────────────────────────────────────────────
-
-/** Where secrets.rs keeps the keys on this OS. */
-const KEY_STORE = navigator.userAgent.includes("Windows")
-  ? "Windows Credential Manager"
-  : "Secret Service (GNOME Keyring, KWallet)";
-
-/** The keys Claude's runs get (code.rs KEYS_FOR_CLAUDE), by their secrets.rs ids. */
-const CLAUDE_KEYS = [
-  {
-    key: "github-token",
-    name: "GitHub",
-    label: N_("Token"),
-    placeholder: "github_pat_… / ghp_…",
-    hint: N_("Lets Claude use gh and the GitHub API. A fine-grained token limited to the repositories you want is safest."),
-  },
-  {
-    key: "obsidian-api-key",
-    name: "Obsidian",
-    label: N_("API key"),
-    placeholder: "…",
-    hint: N_("From Obsidian's Local REST API plugin (Settings → Local REST API). Claude reaches your vault through it while Obsidian is open."),
-  },
-];
-
-function keysPage(present: Record<string, boolean>): HTMLElement {
-  const stored = () => `••••••••  ${t("(stored)")}`;
-  const list = h("div", { class: "stack" });
-  for (const def of CLAUDE_KEYS) {
-    const input = h("input", {
-      type: "password",
-      placeholder: present[def.key] ? stored() : def.placeholder,
-      autocomplete: "off",
-      spellcheck: "false",
-      "aria-label": `${def.name} ${t(def.label)}`,
-    }) as HTMLInputElement;
-    const dotEl = statusDot(present[def.key] ?? false);
-    const saveBtn = h("button", { text: t("Save") });
-    // An empty field saved removes the key.
-    saveBtn.addEventListener("click", async () => {
-      const value = input.value.trim();
-      try {
-        await Bridge.secretSet(def.key, value);
-        present[def.key] = value.length > 0;
-        input.value = "";
-        input.placeholder = value ? stored() : def.placeholder;
-        dotEl.style.background = value ? "var(--leaf)" : "var(--red)";
-      } catch {
-        dotEl.style.background = "var(--amber)";
-      }
-    });
-    list.append(h("div", { class: "key" },
-      h("div", { class: "key-body" },
-        h("div", { class: "row" }, dotEl, h("b", { text: def.name })),
-        h("div", { class: "row" }, h("label", { text: t(def.label) }), input, saveBtn),
-        h("div", { class: "hint", text: t(def.hint) }),
-      ),
-    ));
-  }
-  return pageOf(
-    t("Keys"),
-    t("Keys Claude can use: runs started from the buddy and its terminal get them. They are stored in the {store}, never on disk.", { store: KEY_STORE }),
-    h("div", { class: "card" }, list),
-  );
-}
-
 // ── General page ──────────────────────────────────────────────────────────────
 
 function generalPage(): HTMLElement {
@@ -471,14 +395,14 @@ function languageSelect(): HTMLElement {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-type PageId = "general" | "claude" | "agents" | "connectors" | "keys";
+type PageId = "general" | "claude" | "agents" | "connectors" | "integrations";
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "general", label: N_("General"), icon: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4" },
   { id: "claude", label: "Claude Code", icon: "M4 6l6 6-6 6M12 18h8" },
   { id: "agents", label: N_("Agents"), icon: "M8 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M16 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0" },
   { id: "connectors", label: N_("Connectors"), icon: "M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4" },
-  { id: "keys", label: N_("Keys"), icon: "M4 16a4 4 0 1 0 8 0a4 4 0 1 0-8 0M10.8 13.2 20 4M17 7l2.5 2.5M14.5 9.5l2 2" },
+  { id: "integrations", label: N_("Integrations"), icon: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
 ];
 
 let page: PageId = "general";
@@ -574,10 +498,10 @@ async function render() {
       installed: false, planRelayInstalled: false, settingsPath: "", hookPath: "", hookReady: false,
     };
     body = claudePage(status);
-  } else if (page === "keys") {
+  } else if (page === "integrations") {
     const present: Record<string, boolean> = {};
-    for (const { key } of CLAUDE_KEYS) present[key] = (await Bridge.secretPresent(key)) ?? false;
-    body = keysPage(present);
+    for (const key of INTEGRATION_KEYS) present[key] = (await Bridge.secretPresent(key)) ?? false;
+    body = integrationsPage(settings, save, present);
   } else if (page === "agents") {
     body = agentsPage(await Bridge.agentHooksList());
   } else if (page === "connectors") {
