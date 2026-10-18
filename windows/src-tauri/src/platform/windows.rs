@@ -126,9 +126,25 @@ pub fn move_to_trash(paths: &[PathBuf]) -> Result<(), String> {
     Ok(())
 }
 
+/// The shell's own way to open a link in the default browser.
 pub fn open_url(url: &str) {
-    let _ = no_console(Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]))
-        .spawn();
+    use ::windows::core::{w, PCWSTR};
+    use ::windows::Win32::System::Com::{
+        CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+    };
+    use ::windows::Win32::UI::Shell::ShellExecuteW;
+    use ::windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+    // ShellExecute may wait on the browser and wants a single-threaded COM
+    // apartment, so it runs on a thread of its own, off the caller's.
+    std::thread::spawn(move || unsafe {
+        let inited = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).is_ok();
+        ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+        if inited {
+            CoUninitialize();
+        }
+    });
 }
 
 /// The native "choose folder" dialog (IFileOpenDialog with FOS_PICKFOLDERS),
