@@ -3340,6 +3340,171 @@
    "pt-BR": "Resultados",
    "ru": "Результаты",
    "id": "Hasil"
+  },
+  "Welcome to Buddybara": {
+   "zh-Hans": "欢迎使用 Buddybara",
+   "hi": "Buddybara में आपका स्वागत है",
+   "es": "Te damos la bienvenida a Buddybara",
+   "ar": "مرحبًا بك في Buddybara",
+   "fr": "Bienvenue dans Buddybara",
+   "bn": "Buddybara-এ স্বাগতম",
+   "pt-BR": "Boas-vindas ao Buddybara",
+   "ru": "Добро пожаловать в Buddybara",
+   "id": "Selamat datang di Buddybara"
+  },
+  "A few steps, then Claude Code works from here.": {
+   "zh-Hans": "只需几步，就能在这里使用 Claude Code。",
+   "hi": "बस कुछ कदम, फिर Claude Code यहीं से काम करेगा।",
+   "es": "Unos pocos pasos y Claude Code funcionará desde aquí.",
+   "ar": "بضع خطوات، ثم يعمل Claude Code من هنا.",
+   "fr": "Quelques étapes, puis Claude Code fonctionne d'ici.",
+   "bn": "কয়েকটি ধাপ, তারপর Claude Code এখান থেকেই কাজ করবে।",
+   "pt-BR": "Alguns passos e o Claude Code funciona daqui.",
+   "ru": "Несколько шагов — и Claude Code заработает прямо отсюда.",
+   "id": "Beberapa langkah, lalu Claude Code bisa dipakai dari sini."
+  },
+  "Installs it with winget, in a window of its own.": {
+   "zh-Hans": "用 winget 在单独的窗口中安装。",
+   "hi": "winget से, एक अलग विंडो में इंस्टॉल करता है।",
+   "es": "Lo instala con winget, en una ventana aparte.",
+   "ar": "يثبّته باستخدام winget في نافذة مستقلة.",
+   "fr": "L'installe avec winget, dans une fenêtre à part.",
+   "bn": "winget দিয়ে আলাদা একটি উইন্ডোতে ইনস্টল করে।",
+   "pt-BR": "Instala com o winget, numa janela própria.",
+   "ru": "Устанавливает через winget в отдельном окне.",
+   "id": "Memasangnya dengan winget, di jendela tersendiri."
+  },
+  "Installed": {
+   "zh-Hans": "已安装",
+   "hi": "इंस्टॉल है",
+   "es": "Instalado",
+   "ar": "مثبّت",
+   "fr": "Installé",
+   "bn": "ইনস্টল করা আছে",
+   "pt-BR": "Instalado",
+   "ru": "Установлено",
+   "id": "Terpasang"
+  },
+  "Sign in": {
+   "zh-Hans": "登录",
+   "hi": "साइन इन करें",
+   "es": "Iniciar sesión",
+   "ar": "تسجيل الدخول",
+   "fr": "Se connecter",
+   "bn": "সাইন ইন করুন",
+   "pt-BR": "Entrar",
+   "ru": "Войти",
+   "id": "Masuk"
+  },
+  "Signed in": {
+   "zh-Hans": "已登录",
+   "hi": "साइन इन है",
+   "es": "Sesión iniciada",
+   "ar": "تم تسجيل الدخول",
+   "fr": "Connecté",
+   "bn": "সাইন ইন করা আছে",
+   "pt-BR": "Conectado",
+   "ru": "Вход выполнен",
+   "id": "Sudah masuk"
+  },
+  "Your Claude account, in your browser.": {
+   "zh-Hans": "在浏览器中登录你的 Claude 账号。",
+   "hi": "आपका Claude खाता, आपके ब्राउज़र में।",
+   "es": "Tu cuenta de Claude, en tu navegador.",
+   "ar": "حسابك على Claude، في متصفحك.",
+   "fr": "Ton compte Claude, dans ton navigateur.",
+   "bn": "আপনার Claude অ্যাকাউন্ট, আপনার ব্রাউজারে।",
+   "pt-BR": "Sua conta do Claude, no navegador.",
+   "ru": "Ваш аккаунт Claude, в браузере.",
+   "id": "Akun Claude Anda, di browser."
+  },
+  "Projects folder": {
+   "zh-Hans": "项目文件夹",
+   "hi": "प्रोजेक्ट फ़ोल्डर",
+   "es": "Carpeta de proyectos",
+   "ar": "مجلد المشاريع",
+   "fr": "Dossier des projets",
+   "bn": "প্রজেক্ট ফোল্ডার",
+   "pt-BR": "Pasta de projetos",
+   "ru": "Папка проектов",
+   "id": "Folder proyek"
+  },
+  "Change": {
+   "zh-Hans": "更改",
+   "hi": "बदलें",
+   "es": "Cambiar",
+   "ar": "تغيير",
+   "fr": "Changer",
+   "bn": "বদলান",
+   "pt-BR": "Alterar",
+   "ru": "Изменить",
+   "id": "Ubah"
+  },
+  "Claude Code hooks": {
+   "zh-Hans": "Claude Code Hooks",
+   "hi": "Claude Code Hooks",
+   "es": "Hooks de Claude Code",
+   "ar": "الـ hooks في Claude Code",
+   "fr": "Hooks de Claude Code",
+   "bn": "Claude Code Hooks",
+   "pt-BR": "Hooks do Claude Code",
+   "ru": "Хуки Claude Code",
+   "id": "Hooks Claude Code"
+  },
+  "So Buddybara sees your sessions and shows their permission requests. Settings shows the change before writing it.": {
+   "zh-Hans": "让 Buddybara 能看到你的会话并显示它们的权限请求。设置会先显示改动，再写入。",
+   "hi": "ताकि Buddybara आपके सेशन देख सके और उनके अनुमति अनुरोध दिखा सके। सेटिंग्स लिखने से पहले बदलाव दिखाती है।",
+   "es": "Para que Buddybara vea tus sesiones y muestre sus solicitudes de permiso. Configuración muestra el cambio antes de escribirlo.",
+   "ar": "ليرى Buddybara جلساتك ويعرض طلبات الأذونات منها. تعرض الإعدادات التغيير قبل كتابته.",
+   "fr": "Pour que Buddybara voie tes sessions et affiche leurs demandes d'autorisation. Les Réglages montrent la modification avant de l'écrire.",
+   "bn": "যাতে Buddybara আপনার সেশনগুলো দেখতে পায় আর সেগুলোর অনুমতির অনুরোধ দেখাতে পারে। লেখার আগে সেটিংস পরিবর্তনটি দেখায়।",
+   "pt-BR": "Para o Buddybara ver suas sessões e mostrar os pedidos de permissão delas. As Configurações mostram a mudança antes de gravá-la.",
+   "ru": "Чтобы Buddybara видел ваши сессии и показывал их запросы разрешений. Настройки покажут изменение до того, как его записать.",
+   "id": "Agar Buddybara melihat sesi Anda dan menampilkan permintaan izinnya. Pengaturan menampilkan perubahannya sebelum menulisnya."
+  },
+  "Open Settings": {
+   "zh-Hans": "打开设置",
+   "hi": "सेटिंग्स खोलें",
+   "es": "Abrir Configuración",
+   "ar": "افتح الإعدادات",
+   "fr": "Ouvrir les Réglages",
+   "bn": "সেটিংস খুলুন",
+   "pt-BR": "Abrir Configurações",
+   "ru": "Открыть настройки",
+   "id": "Buka Pengaturan"
+  },
+  "Skip": {
+   "zh-Hans": "跳过",
+   "hi": "छोड़ें",
+   "es": "Omitir",
+   "ar": "تخطٍّ",
+   "fr": "Passer",
+   "bn": "এড়িয়ে যান",
+   "pt-BR": "Pular",
+   "ru": "Пропустить",
+   "id": "Lewati"
+  },
+  "Check again": {
+   "zh-Hans": "再次检查",
+   "hi": "फिर से जाँचें",
+   "es": "Comprobar de nuevo",
+   "ar": "تحقّق مجددًا",
+   "fr": "Vérifier à nouveau",
+   "bn": "আবার দেখুন",
+   "pt-BR": "Verificar de novo",
+   "ru": "Проверить снова",
+   "id": "Periksa lagi"
+  },
+  "Start": {
+   "zh-Hans": "开始",
+   "hi": "शुरू करें",
+   "es": "Empezar",
+   "ar": "ابدأ",
+   "fr": "Commencer",
+   "bn": "শুরু করুন",
+   "pt-BR": "Começar",
+   "ru": "Начать",
+   "id": "Mulai"
   }
  }
 }

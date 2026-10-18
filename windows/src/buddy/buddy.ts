@@ -31,6 +31,7 @@ import {
 } from "./run";
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
 import { BuddyTerminal, type TermTarget } from "./terminal";
+import { Setup } from "./setup";
 import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
   enabledServices, refreshServiceKeys, servicesNews, servicesSeen, servicesVersion, servicesView, startServices,
@@ -294,6 +295,14 @@ export class Buddy {
     (target) => this.terminalEnded(target),
     () => this.hideTerminal(),
   );
+  /** The first-run screen, over the panel while something Buddybara needs is missing. */
+  private setup = new Setup(
+    () => this.chooseFolder(),
+    (page) => {
+      this.hide();
+      void Bridge.openSettingsWindow(page);
+    },
+  );
   private body = h("div", { class: "b-body" });
   private card = h("div", { class: "b-card" });
   private files = h("div", { class: "b-attach" });
@@ -314,7 +323,7 @@ export class Buddy {
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },
       bar, this.menu, this.confirm, this.body, this.terminal.el, this.card, this.files, this.composer, this.dropZone);
-    this.el = h("div", { id: "buddy" }, side, main);
+    this.el = h("div", { id: "buddy" }, side, main, this.setup.el);
     this.genie = h("div", { id: "genie" }, this.el);
     root.append(this.genie);
 
@@ -510,6 +519,7 @@ export class Buddy {
       void this.pour(true);
       void this.loadProjects();
       void this.refreshOtherKeys();
+      void this.setup.check();
       Sound.play("open");
       // The conversation it opens on is looked at now.
       this.seen(this.chat?.id ?? null);

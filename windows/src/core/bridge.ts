@@ -63,6 +63,14 @@ export interface CodeRunOptions {
   ultracode: boolean;
 }
 
+/** What Buddybara needs before it can work (setup.rs Status). */
+export interface SetupStatus {
+  claude: boolean;
+  signedIn: boolean;
+  hooks: boolean;
+  root: string;
+}
+
 /** One `code-run` event: what code.rs `events` makes of Claude Code's stream. */
 export interface CodeRunEvent {
   run: number;
@@ -98,7 +106,11 @@ export const Bridge = {
 
   openUrl: (url: string) => call<void>("open_url", { url }),
 
-  openSettingsWindow: () => call<void>("open_settings_window"),
+  /** `page`: the Settings page to show (settings/main.ts PageId). */
+  openSettingsWindow: (page?: string) => call<void>("open_settings_window", { page }),
+  /** The first-run screen (setup.rs): what is missing, and the steps it starts. */
+  setupStatus: () => callOrThrow<SetupStatus>("setup_status"),
+  setupStart: (step: "install" | "login") => callOrThrow<void>("setup_start", { step }),
 
   /** Writes to %LOCALAPPDATA%\Buddybara\buddybara.log, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),

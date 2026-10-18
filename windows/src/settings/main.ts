@@ -463,6 +463,12 @@ async function main() {
     settings = { ...settings, ...s };
     applyLanguage();
   });
+  // Opened for one page (the panel's first-run screen: Claude Code).
+  void onEvent<string>("settings-page", (p) => {
+    if (p === page || !PAGES.some((x) => x.id === p)) return;
+    page = p as PageId;
+    void rerender(false);
+  });
 }
 
 /** Reads what the page on screen shows, and draws the sidebar and the page. */
