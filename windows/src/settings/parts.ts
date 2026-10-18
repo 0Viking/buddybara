@@ -3,7 +3,7 @@
 import { h } from "../views/dom";
 
 export function statusDot(ok: boolean): HTMLElement {
-  return h("i", { class: "dot", style: `background:${ok ? "#22c55e" : "#f4505e"}` });
+  return h("i", { class: "dot", style: `background:${ok ? "var(--leaf)" : "var(--red)"}` });
 }
 
 export function renderDiff(text: string): HTMLElement {

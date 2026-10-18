@@ -1,24 +1,61 @@
-/* Settings window — same palette as the island, laid out as a normal window. */
+/* Settings window: a sidebar of pages and the page on the right, in the
+   capybara's warm browns, with the mikan's orange as the accent. */
+
+/* Nunito (SIL Open Font License, fonts/OFL.txt), variable 400–800, in the
+   subsets the interface languages use; the others fall through to --font. */
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./fonts/nunito-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./fonts/nunito-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./fonts/nunito-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
 
 :root {
-  /* Makes Windows render the native dropdown and scrollbars dark — without it
+  /* Makes Windows draw the native dropdown and scrollbars dark: without it
      the <select> popup is white text on white. */
   color-scheme: dark;
 
   /* Then the scripts of the other interface languages (see src/style.css). */
-  --font: system-ui, "Segoe UI Variable Text", "Segoe UI", "Nirmala UI", "Microsoft YaHei UI",
+  --font: "Nunito", system-ui, "Segoe UI Variable Text", "Segoe UI", "Nirmala UI", "Microsoft YaHei UI",
     "Microsoft YaHei", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Arabic",
     "Noto Sans CJK SC", "Noto Sans SC", "Droid Sans Fallback", sans-serif;
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
-  --ink: #f5f6f8;
-  --dim: #9398a1;
-  --dim-2: #6b7079;
-  --bg: #0b0c0e;
-  --card: #141518;
-  --hairline: rgba(255, 255, 255, 0.07);
-  --green: #22c55e;
-  --red: #f4505e;
-  --amber: #f5a524;
+  --bg: #15110e;
+  --side: #0f0c0a;
+  --card: #1e1915;
+  --raised: #29221c;
+  --line: rgba(255, 236, 214, 0.08);
+  --line-2: rgba(255, 236, 214, 0.15);
+  --ink: #f7efe6;
+  --dim: #b4a799;
+  --dim-2: #7f7368;
+  --mikan: #ff8a3d;
+  --mikan-ink: #2b1405;
+  --leaf: #5fd38a;
+  --red: #ff6b6b;
+  --amber: #ffc048;
 }
 
 * {
@@ -27,82 +64,245 @@
   padding: 0;
 }
 
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 13.5px/1.45 var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
 #settings-root {
-  padding: 22px 24px 32px;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+
+.side {
+  background: var(--side);
+  border-inline-end: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 720px;
-  margin: 0 auto;
+  gap: 3px;
+  padding: 18px 12px 16px;
+  overflow-y: auto;
 }
 
-h1 {
-  font: 600 17px var(--font);
-  letter-spacing: -0.01em;
-}
-
-h1 .version {
-  font: 400 12px var(--font);
-  color: var(--dim-2);
-  margin-left: 8px;
-}
-
-section {
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-section > h2 {
-  font: 600 13px var(--font);
+.brand {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 0 4px 18px;
+}
+
+.brand canvas {
+  width: 60px;
+  height: 60px;
+  flex: none;
+}
+
+.brand b {
+  display: block;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.brand small {
+  color: var(--dim-2);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+button.nav {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--dim);
+  font-size: 13.5px;
+  text-align: start;
+}
+
+button.nav:hover:not(.on) {
+  background: rgba(255, 236, 214, 0.05);
+  color: var(--ink);
+}
+
+button.nav.on {
+  background: rgba(255, 138, 61, 0.14);
+  color: var(--mikan);
+}
+
+button.nav:active {
+  transform: none;
+}
+
+.side-foot {
+  margin-top: auto;
+  padding: 14px 8px 0;
+  color: var(--dim-2);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+
+.main {
+  overflow-y: auto;
+  padding: 30px 34px 44px;
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.head > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.head h1 {
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.head p {
+  color: var(--dim);
+  margin-top: 5px;
+  max-width: 660px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.card > h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 16px 18px 2px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* A setting: what it is on the left, its control on the right. */
+.srow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px;
+}
+
+.srow + .srow {
+  border-top: 1px solid var(--line);
+}
+
+.srow-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.srow-text b {
+  display: block;
+  font-weight: 700;
+}
+
+.srow-text span {
+  display: block;
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+
+.srow-ctl {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: none;
+  max-width: 60%;
+}
+
+/* A card's free-form body: the hooks, their diff, the keys. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 18px;
 }
 
 .hint {
-  font: 400 12px var(--font);
   color: var(--dim);
+  font-size: 12.5px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
 .row > label {
-  min-width: 132px;
+  min-width: 110px;
   color: var(--dim);
   font-size: 12.5px;
+  font-weight: 700;
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
   display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
   flex: 0 0 auto;
 }
 
+/* ── Controls ────────────────────────────────────────────────────────────── */
+
 button {
-  font: 500 12.5px var(--font);
-  padding: 7px 14px;
-  border: 0;
+  font: 700 12.5px var(--font);
+  padding: 7px 15px;
+  border: 1px solid var(--line-2);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--raised);
   color: var(--ink);
   cursor: pointer;
-  transition: background 0.14s, transform 0.08s;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, color 0.14s, transform 0.08s;
 }
 
 button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: #332a22;
+  border-color: rgba(255, 236, 214, 0.24);
 }
 
 button:active:not(:disabled) {
@@ -110,22 +310,128 @@ button:active:not(:disabled) {
 }
 
 button.primary {
-  background: var(--ink);
-  color: #0b0c0e;
+  background: var(--mikan);
+  border-color: transparent;
+  color: var(--mikan-ink);
 }
 
 button.primary:hover:not(:disabled) {
-  background: #fff;
+  background: #ff9d5c;
+  border-color: transparent;
 }
 
 button.danger {
-  background: rgba(244, 80, 94, 0.16);
-  color: #ff8d97;
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.28);
+  color: #ff9b9b;
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.18);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+button.icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 button:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(255, 138, 61, 0.7);
+  outline-offset: 2px;
+}
+
+.switch {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  flex: 0 0 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: #3a3129;
+}
+
+.switch:hover:not(:disabled) {
+  background: #463b31;
+  border-color: transparent;
+}
+
+.switch.on,
+.switch.on:hover:not(:disabled) {
+  background: var(--mikan);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s;
+}
+
+.switch.on::after {
+  transform: translateX(17px);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 150px;
+  height: 5px;
+  border-radius: 3px;
+  background: #3a3129;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--mikan);
+  box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.22);
+}
+
+input[type="number"],
+input[type="text"],
+input[type="password"],
+select {
+  font: 600 13px var(--font);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  color: var(--ink);
+  padding: 7px 10px;
+}
+
+input::placeholder {
+  color: var(--dim-2);
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: rgba(255, 138, 61, 0.6);
+}
+
+/* The popup is drawn by the OS: give it an explicit pair of colours rather than
+   inheriting white on white. */
+select option {
+  background-color: #241e19;
+  color: var(--ink);
 }
 
 code,
@@ -136,101 +442,24 @@ code,
   user-select: text;
 }
 
-.switch {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
-  flex: 0 0 36px;
-  padding: 0;
-}
-
-.switch.on {
-  background: var(--green);
-}
-
-.switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.18s;
-}
-
-.switch.on::after {
-  transform: translateX(16px);
-}
-
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.2);
-  width: 140px;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-input[type="number"],
-input[type="text"],
-input[type="password"],
-select {
-  font: 400 12.5px var(--font);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  color: var(--ink);
-  padding: 5px 8px;
-}
-
-input::placeholder {
-  color: var(--dim-2);
-}
-
-input:focus,
-select:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.28);
-}
-
-/* The popup is drawn by the OS: give it an explicit pair of colours rather than
-   inheriting white on white. */
-
-select option {
-  background-color: #1a1c20;
-  color: var(--ink);
-}
-
 .diff {
   font: 400 11.5px/1.5 var(--mono);
-  background: #08090b;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
+  background: #0d0a08;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 10px 12px;
-  max-height: 260px;
+  max-height: 280px;
   overflow: auto;
   white-space: pre;
   user-select: text;
 }
 
 .diff .add {
-  color: #86efac;
+  color: #8ee6a8;
 }
 
 .diff .del {
-  color: #ff8d97;
+  color: #ff9b9b;
 }
 
 .diff .ctx {
@@ -238,76 +467,199 @@ select option {
 }
 
 .notice {
-  font: 400 12px var(--font);
-  border-radius: 10px;
-  padding: 8px 12px;
+  font-size: 12.5px;
+  border-radius: 12px;
+  padding: 9px 13px;
 }
 
 .notice.ok {
-  background: rgba(34, 197, 94, 0.12);
-  color: #86efac;
+  background: rgba(95, 211, 138, 0.12);
+  color: #8ee6a8;
 }
 
 .notice.err {
-  background: rgba(244, 80, 94, 0.14);
-  color: #ff8d97;
+  background: rgba(255, 107, 107, 0.12);
+  color: #ff9b9b;
 }
 
 .notice.warn {
-  background: rgba(245, 165, 36, 0.13);
-  color: #fbc06a;
+  background: rgba(255, 192, 72, 0.12);
+  color: #ffd27a;
 }
 
-.palette {
-  position: fixed;
-  z-index: 10;
+/* ── Keys ────────────────────────────────────────────────────────────────── */
+
+.key {
   display: flex;
-  align-items: center;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.key + .key {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.key-body {
+  display: flex;
+  flex-direction: column;
   gap: 7px;
-  padding: 8px 10px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.palette .reset {
-  padding: 3px 10px;
-  font-size: 11.5px;
+.key-body b {
+  font-weight: 800;
 }
 
-.hint.full {
-  color: var(--amber);
+.key-body input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.row.shortcut {
-  flex-wrap: nowrap;
+/* ── Connectors ──────────────────────────────────────────────────────────── */
+
+.group {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.tag {
-  font: 500 10.5px var(--font);
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+.group h3 {
+  font-weight: 800;
+  font-size: 13px;
   color: var(--dim);
+  padding: 0 2px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 11px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  transition: border-color 0.25s;
+}
+
+.conn.ok {
+  border-color: rgba(95, 211, 138, 0.3);
+}
+
+.conn.busy {
+  border-color: rgba(255, 192, 72, 0.4);
+}
+
+.mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 10px;
+}
+
+.mark b {
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.mark.plain {
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  color: var(--dim);
+}
+
+/* The red / green dot, on the mark's corner. */
+.mark .state {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 3px solid var(--card);
+  background: var(--red);
+}
+
+.mark .state.on {
+  background: var(--leaf);
+}
+
+.mark .state.wait {
+  background: var(--dim-2);
+}
+
+.mark .state.busy {
+  background: var(--amber);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.conn-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.conn-name,
+.conn-sub {
   white-space: nowrap;
-  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tag.warn {
-  background: rgba(245, 165, 36, 0.13);
-  color: #fbc06a;
+.conn-name {
+  font-weight: 800;
+  font-size: 13.5px;
 }
 
-.tag.err {
-  background: rgba(244, 80, 94, 0.14);
-  color: #ff8d97;
+.conn-sub {
+  color: var(--dim);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.conn-sub.err {
+  color: #ff9b9b;
+}
+
+.conn button {
+  flex: none;
+  padding: 5px 11px;
+  font-size: 11.5px;
 }
 
 /* Arabic: the window reads right to left (main.ts sets <html dir="rtl">);
    diffs, paths, keys and addresses stay left to right. */
-
-html[dir="rtl"] :is(.diff, .path, .keycap, input[type="password"], input[type="text"]) {
+html[dir="rtl"] :is(.diff, .path, input[type="password"], input[type="text"]) {
   direction: ltr;
+}
+
+html[dir="rtl"] .mark .state {
+  right: auto;
+  left: -4px;
+}
+
+html[dir="rtl"] .switch.on::after {
+  transform: translateX(-17px);
+}
+
+html[dir="rtl"] .switch::after {
+  left: auto;
+  right: 3px;
 }

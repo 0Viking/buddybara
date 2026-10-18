@@ -131,6 +131,16 @@ export const Bridge = {
   /** The Claude plan's windows as the account reports them (claude.rs plan_usage), or null. */
   claudePlanUsage: () => call<unknown>("claude_plan_usage"),
 
+  // ── Connectors: Claude Code's MCP servers (src-tauri/src/mcp.rs) ──────────
+  /** The catalog alone, at once (every state "missing"). */
+  mcpCatalog: async () => (await call<McpEntry[]>("mcp_catalog")) ?? [],
+  /** The catalog with each service's state, then the other configured servers (`claude mcp list`). */
+  mcpStatus: () => callOrThrow<McpEntry[]>("mcp_status"),
+  /** Signs Claude Code in to a catalog service in the browser; resolves once it is done. `again`: Re-auth. */
+  mcpConnect: (id: string, again: boolean) => callOrThrow<void>("mcp_connect", { id, again }),
+  /** Ends the sign-in under way. */
+  mcpCancel: () => call<void>("mcp_cancel"),
+
   approvalDecision: (requestId: string, decision: "allow" | "deny") =>
     call<void>("approval_decision", { requestId, decision }),
   /** "The card is up" — until this lands the relay only waits a moment. */
@@ -235,6 +245,20 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+}
+
+/** One MCP server as Settings → Connectors shows it (mcp.rs Entry). */
+export interface McpEntry {
+  /** The catalog id, or the server's own name for the others. */
+  id: string;
+  name: string;
+  state: "connected" | "needsAuth" | "pending" | "failed" | "disabled" | "missing";
+  /** "work" | "design" | "dev" | "business", or "other" outside the catalog. */
+  group: string;
+  /** In the catalog: it has an Auth button. */
+  catalog: boolean;
+  /** Signed in on claude.ai rather than from here. */
+  claudeAi: boolean;
 }
 
 export interface HookPreview {

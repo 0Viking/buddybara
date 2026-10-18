@@ -9,6 +9,7 @@ mod hooks;
 mod i18n;
 mod island;
 mod log;
+mod mcp;
 mod net;
 mod pipe;
 mod platform;
@@ -422,8 +423,8 @@ fn create_settings_window(app: &AppHandle) {
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title(i18n::t("Settings — Buddybara"))
-        .inner_size(560.0, 680.0)
-        .min_inner_size(460.0, 480.0)
+        .inner_size(1100.0, 740.0)
+        .min_inner_size(900.0, 560.0)
         .resizable(true)
         .visible(false)
         .center()
@@ -500,6 +501,10 @@ pub fn run() {
             status_line_preview,
             status_line_apply,
             claude_plan_usage,
+            mcp::mcp_catalog,
+            mcp::mcp_status,
+            mcp::mcp_connect,
+            mcp::mcp_cancel,
             approval_decision,
             approval_answer,
             approval_ack,
