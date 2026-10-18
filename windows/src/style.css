@@ -1,5 +1,7 @@
-/* Buddybara for Windows — same palette, sizes and type scale as the macOS island.
-   Every colour below is copied from the Swift views. */
+/* Buddybara for Windows: the panel's palette and type, the same as Settings'
+   (settings/settings.css): the capybara's warm browns, the mikan's orange. */
+
+@import "./fonts.css";
 
 :root {
   color-scheme: dark;
@@ -7,30 +9,34 @@
   /* After the Latin fonts: the scripts of the other interface languages —
      Devanagari and Bengali (Nirmala UI), Simplified Chinese (Microsoft YaHei)
      on Windows, the Noto families on Linux. Arabic and Cyrillic are in Segoe UI. */
-  --font: system-ui, "Segoe UI Variable Text", "Segoe UI", "Segoe UI Emoji", "Nirmala UI",
+  --font: "Nunito", system-ui, "Segoe UI Variable Text", "Segoe UI", "Segoe UI Emoji", "Nirmala UI",
     "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali",
     "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans SC", "Droid Sans Fallback", sans-serif;
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 
-  --ink: #f5f6f8;        /* primary text */
-  --ink-2: #f1f2f4;
-  --dim: #9398a1;
-  --dim-2: #8e939c;
-  --dim-3: #6b7079;
-  --dim-4: #5f646d;
-  --dim-5: #4b5563;
-  --card: #141518;
-  --card-flat: #0e0f11;
-  --tab-on: #1d1f23;
-  --hairline: rgba(255, 255, 255, 0.035);
-  --red: #f4505e;
-  --red-text: #ff8d97;
-  --green: #22c55e;
-  --green-2: #34d399;
-  --amber: #f5a524;
+  --ink: #f7efe6;        /* primary text */
+  --ink-2: #efe6dc;
+  --dim: #b4a799;
+  --dim-2: #a3968a;
+  --dim-3: #857a6f;
+  --dim-4: #6e6359;
+  --dim-5: #5a5048;
+  --card: #1e1915;
+  --card-flat: #15110e;
+  --tab-on: #29221c;
+  --hairline: rgba(255, 236, 214, 0.04);
+  --red: #ff6b6b;
+  --red-text: #ff9b9b;
+  --green: #5fd38a;
+  --green-2: #5fd38a;
+  --amber: #ffc048;
   --cyan: #22d3ee;
-  --indigo: #6366f1;
+  --indigo: #ff8a3d;
   --pink: #f472b6;
+  /* The mikan's orange, the accent, and the dark ink that goes on it. */
+  --mikan: #ff8a3d;
+  --mikan-ink: #2b1405;
+  --raised: #29221c;
 }
 
 * {
@@ -102,8 +108,8 @@ body {
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #b0b5be;
+  background: rgba(255, 236, 214, 0.07);
+  color: #d8ccbf;
 }
 
 .tab.on {
@@ -259,7 +265,7 @@ body {
   height: 28px;
   border-radius: 999px;
   background: var(--card-flat);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 236, 214, 0.14);
   display: flex;
   align-items: center;
   cursor: default;
@@ -280,9 +286,9 @@ body {
 
 .code {
   font: 400 12px var(--mono);
-  color: #e8e9ec;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #f7efe6;
+  background: rgba(255, 236, 214, 0.07);
+  border: 1px solid rgba(255, 236, 214, 0.06);
   border-radius: 10px;
   padding: 5px 10px;
   max-width: 100%;
@@ -324,7 +330,7 @@ body {
   width: 32px;
   height: 18px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 236, 214, 0.15);
   flex: 0 0 32px;
   transition: background 0.18s;
   cursor: default;
@@ -356,7 +362,7 @@ input[type="range"] {
   appearance: none;
   height: 3px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 236, 214, 0.2);
   width: 72px;
 }
 
@@ -401,16 +407,16 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 236, 214, 0.1);
   font: 400 11.5px var(--font);
   color: var(--ink-2);
-  border: 1.5px solid rgba(255, 255, 255, 0.75);
+  border: 1.5px solid rgba(255, 236, 214, 0.75);
   transform: scale(1.06);
   transition: border-color 0.3s ease-out 0.45s, transform 0.3s ease-out 0.45s;
 }
 
 .chip.settled {
-  border-color: rgba(255, 255, 255, 0);
+  border-color: rgba(255, 236, 214, 0);
   transform: scale(1);
 }
 
@@ -424,7 +430,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .bubble {
-  background: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 138, 61, 0.16);
   border-radius: 12px;
   padding: 6px 10px;
   font: 400 12.5px var(--font);
@@ -435,7 +441,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .reply {
   font: 400 12.5px var(--font);
-  color: #b0b5be;
+  color: #d8ccbf;
   white-space: pre-wrap;
   padding-right: 8px;
   user-select: text;
@@ -450,7 +456,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .md-p {
   font: 400 12.5px var(--font);
-  color: #b0b5be;
+  color: #d8ccbf;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -467,20 +473,20 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .reply strong {
-  color: #e8e9ec;
+  color: #f7efe6;
   font-weight: 600;
 }
 
 .md-code {
   padding: 1px 4px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 236, 214, 0.08);
   font: 400 11.5px var(--mono);
-  color: #c8cdd4;
+  color: #e3d8cc;
 }
 
 .md-link {
-  color: #60a5fa;
+  color: #ffb27a;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -490,16 +496,16 @@ input[type="range"]::-webkit-slider-thumb {
   align-items: flex-start;
   gap: 8px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 236, 214, 0.08);
   border-radius: 8px;
-  background: #0d0e12;
+  background: #100c0a;
 }
 
 .md-pre pre {
   flex: 1 1 auto;
   min-width: 0;
   font: 400 11px var(--mono);
-  color: #c8cdd4;
+  color: #e3d8cc;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -513,7 +519,7 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 236, 214, 0.06);
   color: var(--dim-3);
   cursor: default;
 }
@@ -552,13 +558,13 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .md-quote .md-p {
-  color: #8a8f98;
+  color: #9c9084;
 }
 
 .md-rule {
   width: 100%;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  border-top: 1px solid rgba(255, 236, 214, 0.3);
   opacity: 0.3;
 }
 
@@ -598,7 +604,7 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 10px;
   border-radius: 12px;
   background: #16171b;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 236, 214, 0.06);
 }
 
 /* ── Arabic: right to left ─────────────────────────────────────────────────────

@@ -130,10 +130,10 @@ export class BuddyTerminal {
       // ConPTY redraws lines itself: xterm.js mustn't reflow them twice.
       windowsPty: { backend: "conpty" },
       theme: {
-        background: "#0e0f11",
-        foreground: "#d6d9de",
-        cursor: "#f5f6f8",
-        selectionBackground: "rgba(99, 102, 241, 0.4)",
+        background: "#15110e",
+        foreground: "#e8ddd1",
+        cursor: "#ff8a3d",
+        selectionBackground: "rgba(255, 138, 61, 0.35)",
       },
     });
     term.loadAddon(this.fit);
