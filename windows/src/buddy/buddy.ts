@@ -237,7 +237,6 @@ export class Buddy {
   private menuOpen = false;
   /** Put away by his minimize button, until Buddybara is started again. */
   private minimized = false;
-  private closeTimer: number | null = null;
   /** Why the sessions of the picked project couldn't be read. */
   private notice = "";
   /** Picks of a multiple-choice question, by question. */
@@ -418,12 +417,8 @@ export class Buddy {
     // text is left to the field.
     document.addEventListener("paste", (e) => this.onPaste(e));
     // The window never takes the keyboard by itself (no-activate): a press in
-    // the panel asks for it, and touching the panel keeps an alert open.
-    this.el.addEventListener("pointerdown", () => {
-      this.disarmClose();
-      void Bridge.focusWindow(true);
-    });
-    this.el.addEventListener("pointerenter", () => this.disarmClose());
+    // the panel asks for it.
+    this.el.addEventListener("pointerdown", () => void Bridge.focusWindow(true));
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || !this.shown) return;
       // Escape in the terminal is Claude's (it interrupts, it closes its menus).
@@ -505,7 +500,7 @@ export class Buddy {
     else this.show(false);
   }
 
-  /** Opened by an alert, it folds away by itself unless touched (Settings' auto-close). */
+  /** Opened by an alert, it leaves the keyboard where it was. */
   show(byAlert: boolean) {
     const was = this.shown;
     if (!was) {
@@ -519,9 +514,7 @@ export class Buddy {
       // The conversation it opens on is looked at now.
       this.seen(this.chat?.id ?? null);
     }
-    if (byAlert && !was) this.armClose();
     if (!byAlert) {
-      this.disarmClose();
       void Bridge.focusWindow(true);
       window.setTimeout(() => {
         if (!this.shown) return;
@@ -543,7 +536,6 @@ export class Buddy {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.el.contains(focused)) focused.blur();
     this.el.inert = true;
-    this.disarmClose();
     this.el.classList.remove("open");
     void Bridge.focusWindow(false);
     if (now) {
@@ -604,19 +596,6 @@ export class Buddy {
     this.genie.classList.remove("pouring");
     genieClear(this.genie, this.el);
     if (!open) void Bridge.setCollapsed(true);
-  }
-
-  private armClose() {
-    this.disarmClose();
-    this.closeTimer = window.setTimeout(() => {
-      this.closeTimer = null;
-      if (!State.pendingApproval) this.hide();
-    }, State.settings.autoCloseInterval * 1000);
-  }
-
-  private disarmClose() {
-    if (this.closeTimer != null) window.clearTimeout(this.closeTimer);
-    this.closeTimer = null;
   }
 
   // ── Projects ────────────────────────────────────────────────────────────────

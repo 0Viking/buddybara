@@ -219,10 +219,6 @@ pub fn open_url(url: &str) {
     let _ = Command::new("xdg-open").arg(url).spawn();
 }
 
-pub fn reveal_folder(path: &str) {
-    let _ = Command::new("xdg-open").arg(path).spawn();
-}
-
 /// The "choose folder" dialog, through zenity or kdialog when either is on
 /// PATH. `None` when the user cancels, or when neither is installed. `owner` is
 /// unused here (the dialog is its own top-level window).

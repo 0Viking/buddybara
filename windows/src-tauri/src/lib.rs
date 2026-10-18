@@ -23,7 +23,6 @@ mod platform;
 mod secrets;
 mod session_window;
 mod settings;
-mod sounds;
 mod terminal;
 mod tray;
 #[cfg(windows)]
@@ -612,10 +611,6 @@ pub fn run() {
             desktop::desktop_buddybara_set_asleep,
             desktop::desktop_buddybara_put_away,
             desktop::desktop_buddybara_anchor,
-            sounds::custom_sounds,
-            sounds::custom_sound,
-            sounds::reveal_sounds_folder,
-            sounds::reload_sounds,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

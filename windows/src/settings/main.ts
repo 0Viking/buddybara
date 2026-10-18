@@ -5,7 +5,6 @@
 import "./settings.css";
 import { Bridge, onEvent, type HookPreview, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
-import { SOUND_NAMES } from "../core/sound";
 import { BotEngine } from "../buddybara/engine";
 import { h, clear, svg } from "../views/dom";
 import { pageOf, renderDiff, statusDot, toggle } from "./parts";
@@ -337,40 +336,11 @@ function generalPage(): HTMLElement {
     void save();
   });
 
-  // Your own sounds: the folder, a reload, and how many are replaced.
-  const customCount = h("span", { class: "hint" });
-  const countCustom = () =>
-    void Bridge.customSounds(SOUND_NAMES).then((own) => {
-      const n = own?.length ?? 0;
-      customCount.textContent = n > 0 ? t("{0} custom", { 0: n }) : "";
-    });
-  countCustom();
-  const soundsFolder = h("button", { text: t("Open sounds folder"), onclick: () => void Bridge.revealSoundsFolder() });
-  const reloadSounds = h("button", {
-    text: t("Reload sounds"),
-    onclick: () => void Bridge.reloadSounds().then(() => window.setTimeout(countCustom, 300)),
-  });
-
-  const autoClose = h("input", {
-    type: "number", min: "5", max: "120", step: "1",
-    value: String(Math.round(settings.autoCloseInterval)),
-    style: "width:76px",
-    "aria-label": t("Auto-close"),
-  }) as HTMLInputElement;
-  autoClose.addEventListener("change", () => {
-    settings.autoCloseInterval = Math.max(5, Math.min(120, Number(autoClose.value) || 15));
-    autoClose.value = String(settings.autoCloseInterval);
-    void save();
-  });
-
   return pageOf(t("General"), null,
     h("div", { class: "card" },
       srow(t("Sound"), null, volume, toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); })),
-      srow(null, t("Drop a file named like one of Buddybara's sounds (finish.wav, approval.mp3, greet.m4a…) in the sounds folder to replace it, then Reload."),
-        customCount, soundsFolder, reloadSounds),
     ),
     h("div", { class: "card" },
-      srow(t("Auto-close"), t("seconds after you leave the buddy"), autoClose),
       srow(t("Launch at startup"), null, toggle(settings.autostart, (v) => { settings.autostart = v; void save(); })),
       srow(t("Language"), null, languageSelect()),
     ),

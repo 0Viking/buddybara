@@ -15,7 +15,6 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 pub struct Settings {
     pub sound_enabled: bool,
     pub sound_volume: f64,
-    pub auto_close_interval: f64,
     pub active_integrations: Vec<String>,
     /// The always-on workspace pill (src/core/pills.ts checks it is one).
     pub main_pill: String,
@@ -76,7 +75,6 @@ impl Default for Settings {
         Self {
             sound_enabled: true,
             sound_volume: 0.12,
-            auto_close_interval: 15.0,
             active_integrations: Vec::new(),
             main_pill: "integration_claude".into(),
             screen: "primary".into(),
@@ -347,7 +345,6 @@ mod tests {
     const CUSTOM: &str = r##"{
   "soundEnabled": false,
   "soundVolume": 0.5,
-  "autoCloseInterval": 30.0,
   "activeIntegrations": ["integration_notion"],
   "mainPill": "agent_cursor",
   "screen": "cursor",
@@ -357,6 +354,10 @@ mod tests {
   "planRelayInstalled": true,
   "pillColors": { "integration_claude": "#2DD4BF" },
   "language": "pt-BR",
+  "chatModels": { "ollama": "llama3.2" },
+  "ollamaUrl": "http://127.0.0.1:11434",
+  "lmstudioUrl": "http://127.0.0.1:1234",
+  "customUrl": "https://llm.example.com",
   "desktopBuddybara": { "onDesktop": true, "spot": { "x": 1500.5, "y": -300.0, "space": "screen" } }
 }"##;
 
@@ -711,7 +712,6 @@ mod tests {
             [
                 "soundEnabled",
                 "soundVolume",
-                "autoCloseInterval",
                 "activeIntegrations",
                 "mainPill",
                 "screen",
@@ -721,6 +721,10 @@ mod tests {
                 "planRelayInstalled",
                 "pillColors",
                 "language",
+                "chatModels",
+                "ollamaUrl",
+                "lmstudioUrl",
+                "customUrl",
                 "desktopBuddybara",
             ]
         );

@@ -67,9 +67,6 @@ async function startBuddy(root: HTMLElement) {
       }
     });
     await onEvent<null>("screen-changed", () => void Bridge.reposition());
-    await onEvent<null>("sounds-changed", () => {
-      void Sound.reload().then(() => Sound.play("pop"));
-    });
     await onEvent<Settings>("settings-changed", (s) => {
       const planWasOn = State.settings.showPlanInNotch;
       State.settings = { ...State.settings, ...s };

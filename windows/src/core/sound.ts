@@ -2,10 +2,6 @@
 // The 29 WAVs are synthesised by scripts/gen-sounds.mjs (see SOUNDS_DIR in vite.config.ts);
 // they are served at /sounds/<name>.wav. Default volume 0.12, slider range 0–0.2,
 // exactly like the Mac player, and several sounds may overlap.
-// A file of the user's own in the sounds folder (src-tauri/src/sounds.rs)
-// replaces a sound; one that doesn't decode falls back to the built-in one.
-
-import { Bridge } from "./bridge";
 
 export const SOUND_NAMES = [
   "peek", "open", "close", "hover", "blip", "slap", "annoyed", "dizzy", "greet",
@@ -25,8 +21,6 @@ class SoundEngine {
   private buffers = new Map<string, AudioBuffer>();
   private loading: Promise<void> | null = null;
   private idleTimer: number | null = null;
-  /** The sounds a file of the user's own replaces, as last loaded. */
-  customized = new Set<string>();
   /** Sounds still playing, by name, so one can be faded out (the greeting). */
   private playing = new Map<string, Set<{ src: AudioBufferSourceNode; gain: GainNode }>>();
 
@@ -47,29 +41,9 @@ class SoundEngine {
     return this.loading;
   }
 
-  /** Reads the sounds folder again (Settings → Reload sounds). */
-  async reload(): Promise<void> {
-    await this.preload();
-    if (this.ctx) await this.loadAll(this.ctx);
-  }
-
   private async loadAll(ctx: AudioContext) {
-    const own = new Set((await Bridge.customSounds(SOUND_NAMES)) ?? []);
-    const customized = new Set<string>();
     await Promise.all(
       SOUND_NAMES.map(async (name) => {
-        if (own.has(name)) {
-          try {
-            const bytes = await Bridge.customSound(name);
-            if (bytes && bytes.byteLength > 0) {
-              this.buffers.set(name, await ctx.decodeAudioData(bytes));
-              customized.add(name);
-              return;
-            }
-          } catch {
-            /* not a format this webview decodes: the built-in sound stays */
-          }
-        }
         try {
           const res = await fetch(`/sounds/${name}.wav`);
           if (!res.ok) return;
@@ -80,7 +54,6 @@ class SoundEngine {
         }
       }),
     );
-    this.customized = customized;
   }
 
   /** WebView2 can hand us a suspended context; call after any user input. */

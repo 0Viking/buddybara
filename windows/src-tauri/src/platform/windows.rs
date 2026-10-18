@@ -131,10 +131,6 @@ pub fn open_url(url: &str) {
         .spawn();
 }
 
-pub fn reveal_folder(path: &str) {
-    let _ = Command::new("explorer").arg(path).spawn();
-}
-
 /// The native "choose folder" dialog (IFileOpenDialog with FOS_PICKFOLDERS),
 /// opened at `start` when it still exists, owned by `owner` (an HWND as isize).
 /// `None` when the user cancels or anything fails. Runs in its own COM

@@ -67,7 +67,6 @@ function taskFor(def: PillDefinition, colors: unknown, name = def.name): AgentTa
 export interface Settings {
   soundEnabled: boolean;
   soundVolume: number;
-  autoCloseInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
   /** The always-on workspace pill: VS Code, Cursor, Codex or Antigravity. */
@@ -97,7 +96,6 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
   soundVolume: 0.12,
-  autoCloseInterval: 15,
   activeIntegrations: [],
   mainPill: DEFAULT_MAIN_PILL,
   screen: "primary",

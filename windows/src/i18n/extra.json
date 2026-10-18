@@ -45,17 +45,6 @@
    "ru": "API-ключ",
    "id": "Kunci API"
   },
-  "Auto-close": {
-   "zh-Hans": "自动关闭",
-   "hi": "अपने आप बंद",
-   "es": "Cierre automático",
-   "ar": "الإغلاق التلقائي",
-   "fr": "Fermeture auto",
-   "bn": "স্বয়ংক্রিয় বন্ধ",
-   "pt-BR": "Fechar sozinho",
-   "ru": "Автозакрытие",
-   "id": "Tutup otomatis"
-  },
   "Back": {
    "zh-Hans": "返回",
    "hi": "वापस",
@@ -1188,17 +1177,6 @@
    "pt-BR": "Chaves que o Claude pode usar: as execuções iniciadas pelo companheiro e pelo terminal dele as recebem. Elas ficam guardadas no {store}, nunca no disco.",
    "ru": "Ключи, которые может использовать Claude: их получают запуски из компаньона и его терминала. Они хранятся в {store}, а не на диске.",
    "id": "Kunci yang bisa dipakai Claude: proses yang dimulai dari buddy dan terminalnya mendapatkannya. Kunci disimpan di {store}, tidak pernah di disk."
-  },
-  "seconds after you leave the buddy": {
-   "zh-Hans": "鼠标离开小伙伴后的秒数",
-   "hi": "बडी छोड़ने के बाद सेकंड",
-   "es": "segundos después de salir del compañero",
-   "ar": "ثانية بعد مغادرة الرفيق",
-   "fr": "secondes après avoir quitté le compagnon",
-   "bn": "বাডি ছাড়ার পর সেকেন্ড",
-   "pt-BR": "segundos depois de sair do companheiro",
-   "ru": "секунд после ухода с компаньона",
-   "id": "detik setelah Anda meninggalkan buddy"
   },
   "Shows your Claude plan usage (5-hour and weekly limits) on the mikan. It is read from your Claude account every few minutes, with the sign-in Claude Code keeps on this computer, and goes nowhere else. Pro and Max plans only.": {
    "zh-Hans": "在橘子上显示你的 Claude 计划用量（5 小时及每周限额）。每隔几分钟用 Claude Code 在这台电脑上保存的登录信息从你的 Claude 账户读取，不会发送到别处。仅限 Pro 和 Max 计划。",
