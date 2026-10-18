@@ -487,6 +487,18 @@ code,
   color: #ffd27a;
 }
 
+/* ── Agents ──────────────────────────────────────────────────────────────── */
+
+.agent + .agent {
+  border-top: 1px solid var(--line);
+}
+
+.agent .srow-text .path {
+  margin-top: 4px;
+  font-size: 11px;
+  white-space: pre-line;
+}
+
 /* ── Keys ────────────────────────────────────────────────────────────────── */
 
 .key {

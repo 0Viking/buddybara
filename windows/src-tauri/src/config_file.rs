@@ -108,6 +108,25 @@ pub fn json_edit<'a>(
     })
 }
 
+/// An `Edit` for a text file Buddybara generates whole (a plugin): `change` gets
+/// the current text and returns the new one, or `None` to remove the file.
+pub fn text_edit<'a>(
+    label: String,
+    change: impl Fn(Option<&str>) -> Result<Option<String>, String> + 'a,
+) -> Edit<'a> {
+    Box::new(move |bytes| {
+        let current = match bytes {
+            None => None,
+            Some(b) => Some(
+                std::str::from_utf8(b)
+                    .map_err(|_| tf("{file} isn't UTF-8 text — Buddybara won't touch it.", &[("file", &label)]))?,
+            ),
+        };
+        let after = change(current)?;
+        Ok(Change { before: current.unwrap_or_default().to_string(), after })
+    })
+}
+
 // ── Preview and apply ─────────────────────────────────────────────────────────
 
 /// Identifies the exact bytes a preview was computed from. FNV-1a is plenty:

@@ -7,7 +7,7 @@
 import { Bridge, type McpEntry } from "../core/bridge";
 import { N_, t } from "../i18n/i18n";
 import { clear, h, svg } from "../views/dom";
-import { BRANDS } from "./brands";
+import { markTile } from "./parts";
 
 const GROUPS: [group: string, label: string][] = [
   ["work", N_("Work")],
@@ -100,37 +100,6 @@ async function connect(entry: McpEntry) {
 
 // ── Cards ─────────────────────────────────────────────────────────────────────
 
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** A tile's background and mark: a near-black brand on a light tile, a light
- *  one under a dark mark, the rest under a white one. */
-function tileColors(hex: string): [string, string] {
-  const l = luminance(hex);
-  if (l < 0.06) return ["#f6efe7", hex];
-  return [hex, l > 0.4 ? "#1d1611" : "#ffffff"];
-}
-
-function mark(entry: McpEntry, state: string): HTMLElement {
-  const brand = BRANDS[entry.id];
-  const el = h("span", { class: brand ? "mark" : "mark plain" });
-  if (brand) {
-    const [bg, fg] = tileColors(brand.color);
-    el.style.background = bg;
-    el.style.color = fg;
-    el.append(brand.path ? svg(brand.path, 21) : h("b", { text: brand.letter ?? "" }));
-  } else {
-    el.append(h("b", { text: (entry.name.match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase() }));
-  }
-  el.append(h("i", { class: `state ${state}` }));
-  return el;
-}
-
 function button(entry: McpEntry, busy: boolean): HTMLElement {
   if (busy) {
     return h("button", {
@@ -163,7 +132,7 @@ function card(entry: McpEntry): HTMLElement {
     ? t("In your browser…")
     : err ?? (!known ? t("Checking…") : entry.claudeAi ? t("Via claude.ai") : t(STATE_TEXT[entry.state]));
   const el = h("div", { class: `conn${state === "on" ? " ok" : ""}${busy ? " busy" : ""}` },
-    mark(entry, state),
+    markTile(entry.id, entry.name, state),
     h("div", { class: "conn-text" },
       h("div", { class: "conn-name", text: entry.name, title: entry.name }),
       h("div", { class: err ? "conn-sub err" : "conn-sub", text: sub, title: sub }),

@@ -1,5 +1,6 @@
 // Buddybara for Windows — app wiring and the commands the island calls.
 
+mod agents;
 mod claude;
 mod code;
 mod config_file;
@@ -201,6 +202,27 @@ fn hooks_apply(
 }
 
 // ── Other agents' hooks and plugins ──────────────────────────────────────────
+
+#[tauri::command]
+fn agent_hooks_list() -> Vec<agents::AgentStatus> {
+    agents::list()
+}
+
+/// The diff the user has to look at before anything is written.
+#[tauri::command]
+fn agent_hooks_preview(agent: String, install: bool) -> Result<config_file::Plan, String> {
+    agents::preview(&agent, install)
+}
+
+/// Only ever called from an explicit click in the settings window, with the
+/// fingerprint of the preview the user looked at.
+#[tauri::command]
+fn agent_hooks_apply(agent: String, install: bool, fingerprint: String) -> Result<String, String> {
+    let backups = agents::apply(&agent, install, &fingerprint)?;
+    let done = if install { "installed" } else { "removed" };
+    log::line(format!("agent hooks {done} for {agent}"));
+    Ok(backups)
+}
 
 // ── Plan usage ────────────────────────────────────────────────────────────────
 
@@ -498,6 +520,9 @@ pub fn run() {
             hooks_status,
             hooks_preview,
             hooks_apply,
+            agent_hooks_list,
+            agent_hooks_preview,
+            agent_hooks_apply,
             status_line_preview,
             status_line_apply,
             claude_plan_usage,

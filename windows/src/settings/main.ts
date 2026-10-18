@@ -8,7 +8,8 @@ import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { SOUND_NAMES } from "../core/sound";
 import { BotEngine } from "../buddybara/engine";
 import { h, clear, svg } from "../views/dom";
-import { renderDiff, statusDot } from "./parts";
+import { pageOf, renderDiff, statusDot } from "./parts";
+import { agentsPage } from "./agents";
 import { connectorsPage } from "./connectors";
 import {
   LANGUAGES, N_, isRtl, onLanguageChange, resolveLanguage, setLanguage, systemLanguages, t,
@@ -41,14 +42,6 @@ function srow(title: string | null, hint: string | null, ...controls: (Node | nu
   return h("div", { class: "srow" },
     h("div", { class: "srow-text" }, title ? h("b", { text: title }) : null, hint ? h("span", { text: hint }) : null),
     h("div", { class: "srow-ctl" }, ...controls),
-  );
-}
-
-/** A page: its title, a line about it, then its cards. */
-function pageOf(title: string, intro: string | null, ...cards: HTMLElement[]): HTMLElement {
-  return h("div", { class: "page" },
-    h("div", { class: "head" }, h("div", {}, h("h1", { text: title }), intro ? h("p", { text: intro }) : null)),
-    ...cards,
   );
 }
 
@@ -478,11 +471,12 @@ function languageSelect(): HTMLElement {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-type PageId = "general" | "claude" | "connectors" | "keys";
+type PageId = "general" | "claude" | "agents" | "connectors" | "keys";
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "general", label: N_("General"), icon: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4" },
   { id: "claude", label: "Claude Code", icon: "M4 6l6 6-6 6M12 18h8" },
+  { id: "agents", label: N_("Agents"), icon: "M8 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M16 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0" },
   { id: "connectors", label: N_("Connectors"), icon: "M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4" },
   { id: "keys", label: N_("Keys"), icon: "M4 16a4 4 0 1 0 8 0a4 4 0 1 0-8 0M10.8 13.2 20 4M17 7l2.5 2.5M14.5 9.5l2 2" },
 ];
@@ -584,6 +578,8 @@ async function render() {
     const present: Record<string, boolean> = {};
     for (const { key } of CLAUDE_KEYS) present[key] = (await Bridge.secretPresent(key)) ?? false;
     body = keysPage(present);
+  } else if (page === "agents") {
+    body = agentsPage(await Bridge.agentHooksList());
   } else if (page === "connectors") {
     body = connectorsPage();
   } else {

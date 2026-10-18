@@ -122,6 +122,18 @@ export const Bridge = {
   hooksApply: (install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
 
+  // ── Other agents' hooks and plugins (src-tauri/src/agents.rs) ─────────────
+  agentHooksList: () => call<AgentHookStatus[]>("agent_hooks_list"),
+  /** Diff to show before anything is written. `install: false` previews removal. */
+  agentHooksPreview: (agent: string, install: boolean) =>
+    callOrThrow<AgentHookPlan>("agent_hooks_preview", { agent, install }),
+  /**
+   * Writes the agent's config — only ever after an explicit click, and only when
+   * it still matches the preview the user looked at. Returns the backups taken.
+   */
+  agentHooksApply: (agent: string, install: boolean, fingerprint: string) =>
+    callOrThrow<string>("agent_hooks_apply", { agent, install, fingerprint }),
+
   // ── Plan usage: the status line relay, installed apart from the hooks ──────
   /** Diff of the status line change. `install: false` previews taking the relay out. */
   statusLinePreview: (install: boolean) => callOrThrow<HookPreview>("status_line_preview", { install }),
@@ -245,6 +257,29 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+}
+
+/** An agent other than Claude Code, as Settings → Agents shows it (agents.rs AgentStatus). */
+export interface AgentHookStatus {
+  /** The `--agent` name. */
+  id: string;
+  name: string;
+  installed: boolean;
+  /** The file (or files, one per line) Buddybara writes. */
+  path: string;
+  hookReady: boolean;
+  /** The panel can allow or deny this agent's permission requests. */
+  approvals: boolean;
+  /** What to do once it is written. */
+  note: string;
+}
+
+export interface AgentHookPlan {
+  diff: string;
+  /** Where each existing file is copied first, one per line; "" when none. */
+  backup: string;
+  path: string;
+  fingerprint: string;
 }
 
 /** One MCP server as Settings → Connectors shows it (mcp.rs Entry). */
