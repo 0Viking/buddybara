@@ -214,6 +214,9 @@ export const Bridge = {
    *  `attachments`: inbox paths (ingestFile, pasteFile) the prompt comes with. */
   codeSend: (project: string, session: string | null, prompt: string, options: CodeRunOptions, attachments: string[] = []) =>
     callOrThrow<number>("code_send", { project, session, prompt, options, attachments }),
+  /** A message for a run at work, read at its next step; false when the run takes no more. */
+  codeSay: (run: number, prompt: string, attachments: string[] = []) =>
+    callOrThrow<boolean>("code_say", { run, prompt, attachments }),
   codeStop: (run: number) => call<void>("code_stop", { run }),
   /** Writes a pasted file into the inbox. The bytes go as they are; `name` must be plain ASCII. */
   pasteFile: (name: string, bytes: Uint8Array) => {

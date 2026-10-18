@@ -813,9 +813,12 @@ export class Buddy {
       this.renderAttachments();
       return;
     }
+    // A Claude Code run at work reads it at its next step; anything else at
+    // work (starting, being stopped, another model) gets it as the next turn.
+    const live = chat.run != null && chat.run !== STARTING && !chat.other && !chat.stopped;
     // What code.rs would refuse is said now, while nothing is cleared yet (a
     // queued turn goes merged with those before it).
-    const goes = chat.run != null ? mergeQueued([...chat.queue, { text, files }]) : { text, files };
+    const goes = chat.run != null && !live ? mergeQueued([...chat.queue, { text, files }]) : { text, files };
     const refused = tooBig(goes.text, goes.files);
     if (refused) {
       this.attachError = refused;
@@ -828,6 +831,7 @@ export class Buddy {
     this.attachError = "";
     this.fitInput();
     Sound.play("send");
+    if (live) return this.say(chat, chat.run!, text, files);
     if (chat.run != null) {
       // Claude is still at it: this is the next turn, sent the moment the run ends.
       chat.queue.push({ text, files });
@@ -866,6 +870,21 @@ export class Buddy {
       if (this.chat === chat) this.restoreQueue(chat);
       this.track(chat);
     }
+    this.render();
+  }
+
+  /** Into the run at work, read at its next step (code.rs say). */
+  private async say(chat: Chat, run: number, text: string, files: string[]) {
+    const line = userLine(text, files);
+    chat.lines.push(line);
+    this.render();
+    if (await Bridge.codeSay(run, text, files).catch(() => false)) return;
+    // Its turn was already over (or its files need a run of their own): the next turn, as before.
+    chat.lines = chat.lines.filter((l) => l !== line);
+    chat.queue.push({ text, files });
+    this.track(chat);
+    // The run may have ended meanwhile, with nothing queued then.
+    if (chat.run == null) this.ended(chat);
     this.render();
   }
 

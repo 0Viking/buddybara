@@ -29,6 +29,18 @@ test("a run's stream becomes the conversation's lines", () => {
   ]);
 });
 
+test("a message sent as the answer ends doesn't make the result repeat that answer", () => {
+  const c = chat();
+  c.lines.push({ role: "user", text: "fix it" });
+  applyRunEvent(c, { run: 1, kind: "text", text: "Fixed." });
+  c.lines.push({ role: "user", text: "and the docs" });
+  applyRunEvent(c, { run: 1, kind: "result", text: "Fixed.", error: false });
+  // Read as one more turn of the same run.
+  applyRunEvent(c, { run: 1, kind: "text", text: "Docs too." });
+  applyRunEvent(c, { run: 1, kind: "result", text: "Docs too.", error: false });
+  assert.deepEqual(c.lines.map((l) => l.text), ["fix it", "Fixed.", "and the docs", "Docs too."]);
+});
+
 test("a run that fails ends on its error", () => {
   const c = chat();
   applyRunEvent(c, { run: 1, kind: "result", text: "Not logged in", error: true });

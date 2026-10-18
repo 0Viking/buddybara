@@ -5,7 +5,8 @@
 // A run is an ordinary Claude Code session. Its hooks fire like any other's,
 // so the island shows its steps and permission cards, and the permission mode
 // is the one the user picked (never a bypass). The prompt goes in on stdin, so
-// nothing in it is ever read as an option.
+// nothing in it is ever read as an option, and so does a message sent while
+// Claude works: Claude Code reads it at its next step, as in VS Code (`say`).
 //
 // Runs and reads stay inside two kinds of folder: a direct child of
 // ~/projects, or a folder a session was already seen working in (its hooks
@@ -16,6 +17,7 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{LazyLock, Mutex};
 use std::time::UNIX_EPOCH;
 
@@ -467,11 +469,11 @@ pub fn conversation(text: &str, max: usize) -> Vec<Message> {
     let mut out: Vec<Message> = Vec::new();
     for line in text.lines() {
         // Most lines are tool results: skip them before parsing.
-        if !(line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"")) {
+        if !(line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") || line.contains("\"queued_command\"")) {
             continue;
         }
         let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
-        if let Some(text) = user_text(&v) {
+        if let Some(text) = user_text(&v).or_else(|| sent_meanwhile(&v)) {
             out.push(Message::said("user", text));
             continue;
         }
@@ -545,6 +547,17 @@ fn user_text(v: &Value) -> Option<String> {
     (!text.is_empty() && typed(text)).then(|| text.to_string())
 }
 
+/// A message sent while Claude was at work, from the line that recorded it
+/// where Claude read it, mid-turn (one read after the turn is a `user` line).
+fn sent_meanwhile(v: &Value) -> Option<String> {
+    let a = v.get("attachment").filter(|_| !flag(v, "isSidechain"))?;
+    if a.get("type").and_then(Value::as_str) != Some("queued_command") {
+        return None;
+    }
+    let text = a.get("prompt")?.as_str()?.trim();
+    (!text.is_empty() && !NOT_TYPED.iter().any(|p| text.starts_with(p))).then(|| text.to_string())
+}
+
 /// The blocks of an `assistant` line — text, thinking, tool calls, in order —
 /// when it is the conversation's own: a subagent's lines are not.
 fn assistant_blocks(v: &Value) -> &[Value] {
@@ -570,6 +583,9 @@ fn one_line(s: &str, max: usize) -> String {
 static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
 /// Runs in flight: run → process id, for Stop.
 static RUNS: LazyLock<Mutex<HashMap<u64, u32>>> = LazyLock::new(Default::default);
+/// Runs still taking messages, until their turn's result: run → their input,
+/// and whether they may read the inbox (they started with files).
+static INPUTS: LazyLock<Mutex<HashMap<u64, (Sender<String>, bool)>>> = LazyLock::new(Default::default);
 
 /// `claude`, from %PATH% or where its installer puts it.
 pub(crate) fn claude_exe() -> Option<PathBuf> {
@@ -595,7 +611,8 @@ pub struct Options {
 /// The arguments of a run, before the prompt goes in on stdin. `files`: the
 /// folder the attached files are in, which Claude may then read without asking.
 fn arguments(session: Option<&str>, options: &Options, files: Option<&Path>) -> Result<Vec<String>, String> {
-    let mut args: Vec<String> = ["-p", "--output-format", "stream-json", "--verbose"].map(String::from).into();
+    let mut args: Vec<String> =
+        ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"].map(String::from).into();
     // Never a bypass, whatever the page asks: only the four modes of the picker.
     let mode = options.mode.as_deref().unwrap_or("default");
     if !MODES.contains(&mode) {
@@ -662,16 +679,9 @@ pub fn send(
     attachments: &[String],
 ) -> Result<u64, String> {
     let cwd = allowed(project)?;
-    let files = crate::files::attachments(attachments)?;
-    let inbox = (!files.is_empty()).then(crate::files::inbox_dir);
+    let (line, with_files) = message(prompt, attachments)?;
+    let inbox = with_files.then(crate::files::inbox_dir);
     let args = arguments(session.as_deref(), options, inbox.as_deref())?;
-    let prompt = with_attachments(prompt.trim(), &files);
-    if prompt.is_empty() {
-        return Err("Nothing to send.".into());
-    }
-    if prompt.chars().count() > MAX_PROMPT {
-        return Err(crate::i18n::tf("A message is at most {max} characters.", &[("max", &MAX_PROMPT.to_string())]));
-    }
     let exe = claude_exe().ok_or_else(|| "Claude Code isn't installed (no claude on PATH or in ~/.local/bin).".to_string())?;
     let mut cmd = Command::new(exe);
     // Left unset, `claude -p` writes "sdk-cli" into the session's file, and
@@ -681,21 +691,63 @@ pub fn send(
     cmd.env("CLAUDE_CODE_ENTRYPOINT", ENTRYPOINT);
     cmd.envs(key_env());
     cmd.args(&args).current_dir(&cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = platform::no_console(&mut cmd).spawn().map_err(|e| format!("Could not start Claude Code: {e}"))?;
+    let mut child = platform::no_console(&mut cmd).spawn().map_err(|e| format!("Could not start Claude Code: {e}"))?;
     let run = NEXT_RUN.fetch_add(1, Ordering::Relaxed);
     RUNS.lock().unwrap().insert(run, child.id());
+    // Claude Code reads its input to the end: this message, then those sent
+    // while it works, written in order off this thread. The input ends when
+    // the last sender goes (`watch`, at the result): what was written is still
+    // read, then Claude Code exits.
+    let (input, lines) = channel::<String>();
+    let _ = input.send(line);
+    if let Some(mut stdin) = child.stdin.take() {
+        std::thread::spawn(move || {
+            for line in lines {
+                if stdin.write_all(line.as_bytes()).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    INPUTS.lock().unwrap().insert(run, (input, with_files));
     log::line(format!("code run {run} started ({})", if session.is_some() { "continued" } else { "new" }));
-    std::thread::spawn(move || watch(&app, run, child, &prompt));
+    std::thread::spawn(move || watch(&app, run, child));
     Ok(run)
 }
 
-/// Feeds the prompt, then turns every line Claude Code prints into events until
-/// it exits. A run that ends without a `result` line (not logged in, stopped,
-/// crashed) still ends with one, carrying the last thing it said on stderr.
-fn watch(app: &AppHandle, run: u64, mut child: Child, prompt: &str) {
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(prompt.as_bytes());
-    } // dropped here: Claude Code sees the end of the prompt
+/// What a run is sent, checked: the prompt and its attached files as a line of
+/// `--input-format stream-json`, and whether files came with it.
+fn message(prompt: &str, attachments: &[String]) -> Result<(String, bool), String> {
+    let files = crate::files::attachments(attachments)?;
+    let prompt = with_attachments(prompt.trim(), &files);
+    if prompt.is_empty() {
+        return Err("Nothing to send.".into());
+    }
+    if prompt.chars().count() > MAX_PROMPT {
+        return Err(crate::i18n::tf("A message is at most {max} characters.", &[("max", &MAX_PROMPT.to_string())]));
+    }
+    let line = json!({ "type": "user", "message": { "role": "user", "content": prompt } });
+    Ok((format!("{line}\n"), !files.is_empty()))
+}
+
+/// A message for a run at work, read at its next step (or as one more turn if
+/// its answer is already being written). False when it takes no more: its turn
+/// is over, or the message has files and the run may not read the inbox — the
+/// page then sends it as the next run.
+pub fn say(run: u64, prompt: &str, attachments: &[String]) -> Result<bool, String> {
+    let (line, with_files) = message(prompt, attachments)?;
+    let inputs = INPUTS.lock().unwrap();
+    let Some((input, reads_inbox)) = inputs.get(&run) else { return Ok(false) };
+    if with_files && !reads_inbox {
+        return Ok(false);
+    }
+    Ok(input.send(line).is_ok())
+}
+
+/// Turns every line Claude Code prints into events until it exits. A run that
+/// ends without a `result` line (not logged in, stopped, crashed) still ends
+/// with one, carrying the last thing it said on stderr.
+fn watch(app: &AppHandle, run: u64, mut child: Child) {
     let stderr = child.stderr.take();
     let errors = std::thread::spawn(move || {
         let mut text = String::new();
@@ -711,6 +763,9 @@ fn watch(app: &AppHandle, run: u64, mut child: Child, prompt: &str) {
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
             let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+            if v.get("type").and_then(Value::as_str) == Some("result") {
+                INPUTS.lock().unwrap().remove(&run);
+            }
             for mut event in events(&v) {
                 answered |= event["kind"] == "result";
                 event["run"] = json!(run);
@@ -721,6 +776,7 @@ fn watch(app: &AppHandle, run: u64, mut child: Child, prompt: &str) {
     let code = child.wait().ok().and_then(|s| s.code());
     let errors = errors.join().unwrap_or_default();
     RUNS.lock().unwrap().remove(&run);
+    INPUTS.lock().unwrap().remove(&run);
     if !answered {
         let last = errors.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or("Claude Code stopped.");
         emit(json!({ "run": run, "kind": "result", "error": true, "text": last }));
@@ -816,13 +872,13 @@ mod tests {
         let args = arguments(Some("644458cf-87fd-4800-881d-c7ccf962fd84"), &Options { mode: Some("plan".into()), effort: Some("max".into()), model: Some("claude-fable-5-1".into()), ultracode: false }, None).unwrap();
         assert_eq!(
             args.join(" "),
-            "-p --output-format stream-json --verbose --permission-mode plan --effort max --model claude-fable-5-1 --resume 644458cf-87fd-4800-881d-c7ccf962fd84"
+            "-p --input-format stream-json --output-format stream-json --verbose --permission-mode plan --effort max --model claude-fable-5-1 --resume 644458cf-87fd-4800-881d-c7ccf962fd84"
         );
         // Ultracode goes with the effort, whatever it is.
         let ultra = Options { effort: Some("max".into()), ultracode: true, ..Default::default() };
         assert_eq!(
             arguments(None, &ultra, None).unwrap(),
-            ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "default", "--settings", r#"{"ultracode":true}"#, "--effort", "max"]
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "default", "--settings", r#"{"ultracode":true}"#, "--effort", "max"]
         );
         assert!(arguments(None, &Options::default(), None).unwrap().join(" ").contains("--permission-mode default"));
         for mode in ["bypassPermissions", "dontAsk", "--dangerously-skip-permissions"] {
@@ -955,6 +1011,21 @@ mod tests {
         assert_eq!(conversation(&lines, 2), all);
         assert_eq!(conversation(&lines, 3), all);
         assert!(conversation(&lines, 0).is_empty());
+    }
+
+    #[test]
+    fn a_message_sent_while_claude_works_shows_where_it_was_read() {
+        let lines = [
+            r#"{"type":"user","message":{"content":"run the tests"}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}]}}"#,
+            r#"{"type":"queue-operation","operation":"enqueue","content":"and the lint"}"#,
+            r#"{"type":"attachment","attachment":{"type":"queued_command","prompt":"and the lint","commandMode":"prompt"}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Both pass."}]}}"#,
+        ]
+        .join("\n");
+        let said: Vec<(&str, String)> = conversation(&lines, 10).into_iter().map(|m| (m.role, m.text)).collect();
+        let want = [("user", "run the tests"), ("step", ""), ("user", "and the lint"), ("assistant", "Both pass.")];
+        assert_eq!(said, want.map(|(role, text)| (role, text.to_string())));
     }
 
     #[test]

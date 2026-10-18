@@ -8,7 +8,7 @@ import { language, t } from "../i18n/i18n";
 /** `files`: a user line's attachments, by path. */
 export type Line = { role: "user" | "assistant" | "step" | "error"; text: string; files?: string[] };
 
-/** Typed while Claude was still at work: the next turn, sent when its run ends. */
+/** Typed while a run that can't take it was at work: the next turn, sent when that run ends. */
 export interface Queued {
   text: string;
   files: string[];
@@ -73,24 +73,29 @@ export function applyRunEvent(chat: Chat, e: CodeRunEvent) {
     case "tool":
       chat.lines.push({ role: "step", text: stepLabel(e.tool ?? "Tool", e.input ?? {}) });
       break;
-    case "result":
+    case "result": {
       chat.failed = e.error === true;
+      // The turn's last answer: messages sent while it was written may follow it.
+      let at = chat.lines.length - 1;
+      while (chat.lines[at]?.role === "user") at--;
+      const answer = chat.lines[at]?.role === "assistant" ? chat.lines[at] : undefined;
       if (e.error) {
         const text = e.text || "Claude Code stopped.";
         // An API error comes as Claude's answer first, then as the result: one
         // red line, not the same words twice.
-        if (last?.role === "assistant" && last.text.endsWith(text)) {
-          last.text = last.text.slice(0, -text.length).trimEnd();
-          if (!last.text) chat.lines.pop();
+        if (answer?.text.endsWith(text)) {
+          answer.text = answer.text.slice(0, -text.length).trimEnd();
+          if (!answer.text) chat.lines.splice(at, 1);
         }
         chat.lines.push({ role: "error", text });
       }
       // The result repeats the last answer; anything else is news.
-      else if (e.text && !(last?.role === "assistant" && last.text.endsWith(e.text))) {
+      else if (e.text && !answer?.text.endsWith(e.text)) {
         chat.lines.push({ role: "assistant", text: e.text });
       }
       if (e.session) chat.id = e.session;
       break;
+    }
   }
 }
 

@@ -387,6 +387,13 @@ async fn paste_file(request: tauri::ipc::Request<'_>) -> Result<DroppedFile, Str
     files::save_pasted(name, bytes)
 }
 
+/// A message for a run at work, read at its next step; false when it takes no
+/// more (the page sends it as the next run).
+#[tauri::command]
+fn code_say(run: u64, prompt: String, attachments: Option<Vec<String>>) -> Result<bool, String> {
+    code::say(run, &prompt, &attachments.unwrap_or_default())
+}
+
 #[tauri::command]
 fn code_stop(run: u64) {
     code::stop(run);
@@ -583,6 +590,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             code_send,
+            code_say,
             code_stop,
             paste_file,
             log_line,
