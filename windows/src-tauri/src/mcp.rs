@@ -222,6 +222,19 @@ fn display_name(name: &str) -> String {
     name.strip_prefix("claude.ai ").unwrap_or(name).to_string()
 }
 
+/// Whether a connector of claude.ai's directory is one of the catalog's (by its
+/// name, or claude.ai's name for it).
+pub(crate) fn in_catalog(name: &str) -> bool {
+    let k = key(name);
+    CATALOG.iter().any(|s| {
+        let aka = match s.via {
+            Via::ClaudeAi { aka, .. } => aka,
+            Via::Remote { .. } => "",
+        };
+        k == key(s.id) || k == key(s.name) || (!aka.is_empty() && k == key(aka))
+    })
+}
+
 /// The catalog with each service's state, then every other configured server.
 fn entries(listed: &[(String, &'static str)]) -> Vec<Entry> {
     let mut used = vec![false; listed.len()];

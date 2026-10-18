@@ -16,6 +16,11 @@ use crate::i18n::t;
 use crate::{mcp, net, platform};
 
 const API: &str = "https://api.anthropic.com/api/directory/plugins";
+/// claude.ai's connectors, with their page there (also public: Claude Code reads it).
+const SERVERS: &str = "https://api.anthropic.com/api/directory/servers";
+/// How many search results a page shows.
+const RESULTS: usize = 30;
+const MAX_QUERY: usize = 100;
 /// Claude Code's built-in marketplace for the Directory.
 const MARKETPLACE: &str = "anthropic-plugin-directory";
 /// How many entries a department shows; claude.ai has the rest.
@@ -188,6 +193,102 @@ fn message_of(err: String) -> String {
         .unwrap_or(err)
 }
 
+/// Skills or plugins of the whole Directory matching `query`, best match first.
+#[tauri::command]
+pub async fn directory_search(kind: String, query: String) -> Result<Vec<Entry>, String> {
+    let query = query.trim();
+    if query.is_empty() || query.chars().count() > MAX_QUERY {
+        return Ok(Vec::new());
+    }
+    let limit = RESULTS.to_string();
+    let answer = get(&[("limit", &limit), ("q", query), ("filter", kind_filter(&kind)?)]).await?;
+    let (names, installed) = (install_names(), installed());
+    Ok(answer
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|list| list.iter().filter_map(|x| entry(x, &names, &installed)).collect())
+        .unwrap_or_default())
+}
+
+/// A connector of claude.ai's directory that Buddybara's catalog lacks.
+#[derive(Serialize, Clone)]
+pub struct Connector {
+    name: String,
+    summary: String,
+    /// Its page on claude.ai, where it is switched on.
+    page: String,
+}
+
+static SERVER_LIST: Mutex<Option<(Instant, Vec<Value>)>> = Mutex::new(None);
+
+/// Every connector of claude.ai's directory, kept FRESH.
+async fn servers() -> Result<Vec<Value>, String> {
+    if let Some((at, list)) = SERVER_LIST.lock().unwrap().as_ref() {
+        if at.elapsed() < FRESH {
+            return Ok(list.clone());
+        }
+    }
+    let mut all = Vec::new();
+    let mut cursor: Option<String> = None;
+    for _ in 0..10 {
+        let mut query = vec![("limit", "500".to_string()), ("visibility", "commercial".to_string())];
+        if let Some(c) = &cursor {
+            query.push(("cursor", c.clone()));
+        }
+        let url = Url::parse_with_params(SERVERS, &query).map_err(|e| e.to_string())?;
+        let response = net::client(&url, Duration::from_secs(20))?
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| crate::i18n::tf("Network error: {error}", &[("error", &e.to_string())]))?;
+        if !response.status().is_success() {
+            return Err(format!("Directory {}", response.status().as_u16()));
+        }
+        let page: Value = serde_json::from_slice(&net::read_capped(response, net::MAX_BODY).await?)
+            .map_err(|_| t("Unexpected API response."))?;
+        all.extend(page.get("servers").and_then(Value::as_array).cloned().unwrap_or_default());
+        cursor = page.get("next_cursor").and_then(Value::as_str).map(str::to_string);
+        if cursor.is_none() {
+            break;
+        }
+    }
+    *SERVER_LIST.lock().unwrap() = Some((Instant::now(), all.clone()));
+    Ok(all)
+}
+
+/// Whether a word of `text` starts with `q` (lowercase): "git" finds GitHub, not Digits.
+fn word_starts(text: &str, q: &str) -> bool {
+    text.to_lowercase().split(|c: char| !c.is_alphanumeric()).any(|w| w.starts_with(q))
+}
+
+/// claude.ai's connectors with a word starting with `query` (in the name first,
+/// then the description) that the Connectors page doesn't list, most used first.
+#[tauri::command]
+pub async fn connector_search(query: String) -> Result<Vec<Connector>, String> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || q.chars().count() > MAX_QUERY {
+        return Ok(Vec::new());
+    }
+    let text = |x: &Value, k: &str| x.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let mut found: Vec<(u8, u64, Connector)> = servers()
+        .await?
+        .iter()
+        .filter_map(|x| {
+            let name = Some(text(x, "display_name")).filter(|n| !n.is_empty()).unwrap_or_else(|| text(x, "name"));
+            let summary = text(x, "one_liner");
+            let page = text(x, "directory_url");
+            let by_name = word_starts(&name, &q);
+            if (!by_name && !word_starts(&summary, &q)) || !page.starts_with("https://claude.ai/") || mcp::in_catalog(&name) {
+                return None;
+            }
+            let rank = x.get("popularity_rank").and_then(Value::as_u64).unwrap_or(u64::MAX);
+            Some((u8::from(!by_name), rank, Connector { name, summary, page }))
+        })
+        .collect();
+    found.sort_by_key(|(by, rank, _)| (*by, *rank));
+    Ok(found.into_iter().take(15).map(|(_, _, c)| c).collect())
+}
+
 /// The name Claude Code installs Directory entry `id` as, checked.
 fn install_name(id: &str) -> Result<String, String> {
     let name = install_names().get(id).cloned().ok_or_else(|| t("Claude Code doesn't know this one yet: open /plugin in Claude Code once, then try again."))?;
@@ -246,5 +347,6 @@ mod tests {
         let unknown = entry(&json!({ "id": "plugin_2", "name": "x" }), &names, &installed).unwrap();
         assert!(!unknown.installable && !unknown.installed);
         assert!(kind_filter("connectors").is_err());
+        assert!(word_starts("GitHub Enterprise", "git") && !word_starts("Digits", "git"));
     }
 }

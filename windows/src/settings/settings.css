@@ -643,6 +643,46 @@ html[dir="rtl"] .stack.svc-keys {
   font-size: 11.5px;
 }
 
+/* ── Search fields (parts.ts searchBox) ───────────────────────────────────── */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  color: var(--dim-2);
+  cursor: text;
+  transition: border-color 0.15s;
+}
+
+.search:focus-within {
+  border-color: rgba(255, 138, 61, 0.6);
+  color: var(--mikan);
+}
+
+.search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 13.5px var(--font);
+  outline: none;
+}
+
+.search input:focus-visible {
+  outline: none;
+}
+
+.search input::placeholder {
+  color: var(--dim-2);
+}
+
 /* ── Skills and Plugins (directory.ts) ──────────────────────────────────────── */
 
 .head-actions {

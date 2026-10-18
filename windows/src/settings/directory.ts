@@ -5,7 +5,7 @@
 import { Bridge, type DirCategory, type DirEntry, type DirKind } from "../core/bridge";
 import { clear, h, svg } from "../views/dom";
 import { N_, t } from "../i18n/i18n";
-import { markTile } from "./parts";
+import { markTile, searchBox } from "./parts";
 
 /** The Directory's departments (its `work_department`), as claude.ai names them. */
 const DEPARTMENT: Record<string, string> = {
@@ -23,14 +23,16 @@ const DEPARTMENT: Record<string, string> = {
   "it-security": N_("IT & security"),
 };
 
-const PAGE: Record<DirKind, { title: string; intro: string; more: string }> = {
+const PAGE: Record<DirKind, { title: string; intro: string; more: string; search: string }> = {
   skills: {
     title: N_("Skills"),
+    search: N_("Search skills…"),
     intro: N_("Know-how Claude Code picks up when a task needs it: the most used skills of Anthropic's Directory, by department. An installed skill starts with your next Claude Code session."),
     more: "https://claude.ai/customize/skills",
   },
   plugins: {
     title: N_("Plugins"),
+    search: N_("Search plugins…"),
     intro: N_("Commands, agents, hooks and connections that extend Claude Code: the most used plugins of Anthropic's Directory, by department. Plugins can run code on this computer, so install the ones you trust. They start with your next Claude Code session."),
     more: "https://claude.ai/customize/plugins",
   },
@@ -44,6 +46,9 @@ const sections = new Map<string, DirEntry[]>();
 /** The entry being installed or removed, and why the last attempt on one failed. */
 const busy = new Set<string>();
 const errors = new Map<string, string>();
+/** What each page's search field holds, and what the Directory answered for it. */
+const queries = new Map<DirKind, string>();
+const results = new Map<string, DirEntry[]>();
 
 const errorText = (err: unknown) => String(err).replace(/^Error:\s*/, "");
 
@@ -136,23 +141,47 @@ function section(kind: DirKind, category: DirCategory): HTMLElement {
   );
 }
 
+/** The whole Directory's answer to `query`, best match first. */
+function searchResults(kind: DirKind, query: string, into: HTMLElement) {
+  const key = `${kind}\n${query}`;
+  const head = h("h3", { text: t("Searching…") });
+  const grid = h("div", { class: "grid" });
+  into.append(h("section", { class: "group" }, h("div", { class: "group-head" }, head, getMore(PAGE[kind].more, t("Get more"))), grid));
+  const draw = () => {
+    const list = results.get(key) ?? [];
+    head.textContent = `${t("Results")} · ${list.length}`;
+    clear(grid);
+    if (!list.length) grid.append(h("div", { class: "hint", text: t("No results") }));
+    for (const e of list) grid.append(card(e, draw));
+  };
+  if (results.has(key)) return draw();
+  Bridge.directorySearch(kind, query)
+    .then((list) => {
+      results.set(key, list);
+      if (queries.get(kind) === query) draw();
+    })
+    .catch((err) => {
+      clear(grid);
+      grid.append(h("div", { class: "notice err", text: errorText(err) }));
+    });
+}
+
 export function directoryPage(kind: DirKind): HTMLElement {
   const def = PAGE[kind];
-  const body = h("div", { class: "page" },
-    h("div", { class: "head" },
-      h("div", {}, h("h1", { text: t(def.title) }), h("p", { text: t(def.intro) })),
-      getMore(def.more, t("Get more on claude.ai")),
-    ),
-  );
-  const list = h("div", { class: "page-sections" }, h("div", { class: "hint", text: t("Loading…") }));
-  body.append(list);
+  const list = h("div", { class: "page-sections" });
   const fill = (cats: DirCategory[]) => {
+    if (queries.get(kind)) return;
     clear(list);
     for (const c of cats) list.append(section(kind, c));
   };
-  const known = categories.get(kind);
-  if (known) fill(known);
-  else {
+  // The departments, or the results of what the search field holds.
+  const show = (query: string) => {
+    queries.set(kind, query);
+    clear(list);
+    if (query) return searchResults(kind, query, list);
+    const known = categories.get(kind);
+    if (known) return fill(known);
+    list.append(h("div", { class: "hint", text: t("Loading…") }));
     Bridge.directoryCategories(kind)
       .then((cats) => {
         categories.set(kind, cats);
@@ -162,6 +191,15 @@ export function directoryPage(kind: DirKind): HTMLElement {
         clear(list);
         list.append(h("div", { class: "notice err", text: errorText(err) }));
       });
-  }
+  };
+  const body = h("div", { class: "page" },
+    h("div", { class: "head" },
+      h("div", {}, h("h1", { text: t(def.title) }), h("p", { text: t(def.intro) })),
+      getMore(def.more, t("Get more on claude.ai")),
+    ),
+    searchBox(t(def.search), queries.get(kind) ?? "", show),
+    list,
+  );
+  show(queries.get(kind) ?? "");
   return body;
 }

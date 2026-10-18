@@ -3,6 +3,20 @@
 import { h, svg } from "../views/dom";
 import { BRANDS } from "./brands";
 
+const SEARCH_ICON = "M11 18a7 7 0 1 0 0-14a7 7 0 0 0 0 14M20 20l-4-4";
+
+/** A search field: `onSearch` gets the text a moment after the typing stops. */
+export function searchBox(placeholder: string, value: string, onSearch: (query: string) => void): HTMLElement {
+  const input = h("input", { type: "search", placeholder, spellcheck: "false", autocomplete: "off", "aria-label": placeholder }) as HTMLInputElement;
+  input.value = value;
+  let timer = 0;
+  input.addEventListener("input", () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => onSearch(input.value.trim()), 250);
+  });
+  return h("label", { class: "search" }, svg(SEARCH_ICON, 15, { stroke: 2.2 }), input);
+}
+
 /** An on / off switch. */
 export function toggle(on: boolean, onChange: (v: boolean) => void): HTMLElement {
   const el = h("button", { class: on ? "switch on" : "switch", "aria-pressed": on });

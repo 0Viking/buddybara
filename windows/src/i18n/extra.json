@@ -3274,6 +3274,94 @@
    "pt-BR": "O Claude Code demorou demais para responder.",
    "ru": "Claude Code слишком долго не отвечал.",
    "id": "Claude Code terlalu lama menjawab."
+  },
+  "Open": {
+   "zh-Hans": "打开",
+   "hi": "खोलें",
+   "es": "Abrir",
+   "ar": "فتح",
+   "fr": "Ouvrir",
+   "bn": "খুলুন",
+   "pt-BR": "Abrir",
+   "ru": "Открыть",
+   "id": "Buka"
+  },
+  "More on claude.ai": {
+   "zh-Hans": "claude.ai 上还有",
+   "hi": "claude.ai पर और भी",
+   "es": "También en claude.ai",
+   "ar": "أيضًا على claude.ai",
+   "fr": "Aussi sur claude.ai",
+   "bn": "claude.ai-এ আরও আছে",
+   "pt-BR": "Também no claude.ai",
+   "ru": "Ещё на claude.ai",
+   "id": "Juga di claude.ai"
+  },
+  "No results": {
+   "zh-Hans": "没有结果",
+   "hi": "कोई नतीजा नहीं",
+   "es": "Sin resultados",
+   "ar": "لا نتائج",
+   "fr": "Aucun résultat",
+   "bn": "কোনো ফলাফল নেই",
+   "pt-BR": "Nenhum resultado",
+   "ru": "Ничего не найдено",
+   "id": "Tidak ada hasil"
+  },
+  "Search connectors…": {
+   "zh-Hans": "搜索连接器…",
+   "hi": "कनेक्टर खोजें…",
+   "es": "Buscar conectores…",
+   "ar": "ابحث في الموصلات…",
+   "fr": "Rechercher des connecteurs…",
+   "bn": "কানেক্টর খুঁজুন…",
+   "pt-BR": "Buscar conectores…",
+   "ru": "Поиск коннекторов…",
+   "id": "Cari konektor…"
+  },
+  "Search skills…": {
+   "zh-Hans": "搜索技能…",
+   "hi": "स्किल्स खोजें…",
+   "es": "Buscar skills…",
+   "ar": "ابحث في المهارات…",
+   "fr": "Rechercher des skills…",
+   "bn": "স্কিল খুঁজুন…",
+   "pt-BR": "Buscar skills…",
+   "ru": "Поиск навыков…",
+   "id": "Cari skill…"
+  },
+  "Search plugins…": {
+   "zh-Hans": "搜索插件…",
+   "hi": "प्लगइन खोजें…",
+   "es": "Buscar plugins…",
+   "ar": "ابحث في الإضافات…",
+   "fr": "Rechercher des plugins…",
+   "bn": "প্লাগইন খুঁজুন…",
+   "pt-BR": "Buscar plugins…",
+   "ru": "Поиск плагинов…",
+   "id": "Cari plugin…"
+  },
+  "Searching…": {
+   "zh-Hans": "正在搜索…",
+   "hi": "खोज रहे हैं…",
+   "es": "Buscando…",
+   "ar": "جارٍ البحث…",
+   "fr": "Recherche…",
+   "bn": "খোঁজা হচ্ছে…",
+   "pt-BR": "Buscando…",
+   "ru": "Поиск…",
+   "id": "Mencari…"
+  },
+  "Results": {
+   "zh-Hans": "结果",
+   "hi": "नतीजे",
+   "es": "Resultados",
+   "ar": "النتائج",
+   "fr": "Résultats",
+   "bn": "ফলাফল",
+   "pt-BR": "Resultados",
+   "ru": "Результаты",
+   "id": "Hasil"
   }
  }
 }

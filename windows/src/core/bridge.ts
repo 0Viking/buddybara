@@ -167,6 +167,10 @@ export const Bridge = {
   directoryCategories: (kind: DirKind) => callOrThrow<DirCategory[]>("directory_categories", { kind }),
   /** The most used entries of one department. */
   directorySection: (kind: DirKind, category: string) => callOrThrow<DirEntry[]>("directory_section", { kind, category }),
+  /** Skills or plugins of the whole Directory matching `query`, best match first. */
+  directorySearch: (kind: DirKind, query: string) => callOrThrow<DirEntry[]>("directory_search", { kind, query }),
+  /** claude.ai's connectors matching `query` that the Connectors page doesn't list. */
+  connectorSearch: (query: string) => callOrThrow<DirConnector[]>("connector_search", { query }),
   /** Installs a Directory entry for Claude Code (`claude plugin install`, user scope). */
   pluginInstall: (id: string) => callOrThrow<void>("plugin_install", { id }),
   pluginUninstall: (id: string) => callOrThrow<void>("plugin_uninstall", { id }),
@@ -311,6 +315,14 @@ export interface DirEntry {
   /** Claude Code knows how to install it. */
   installable: boolean;
   installed: boolean;
+}
+
+/** A connector of claude.ai's directory (directory.rs Connector). */
+export interface DirConnector {
+  name: string;
+  summary: string;
+  /** Its page on claude.ai, where it is switched on. */
+  page: string;
 }
 
 /** A model a chat provider offers (chat.rs ModelInfo). */

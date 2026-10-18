@@ -4,10 +4,10 @@
 // browser; a claude.ai connector opens claude.ai's connector settings instead.
 // What the page learnt is kept while the window is only hidden.
 
-import { Bridge, type McpEntry } from "../core/bridge";
+import { Bridge, type DirConnector, type McpEntry } from "../core/bridge";
 import { N_, t } from "../i18n/i18n";
 import { clear, h, svg } from "../views/dom";
-import { markTile } from "./parts";
+import { markTile, searchBox } from "./parts";
 
 const GROUPS: [group: string, label: string][] = [
   ["work", N_("Work")],
@@ -148,45 +148,104 @@ function card(entry: McpEntry): HTMLElement {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-function fill(body: HTMLElement) {
-  const refreshButton = h("button", { class: "icon", onclick: () => void refresh() },
-    svg(REFRESH_ICON, 14, { stroke: 2.4 }),
-    reading ? t("Checking…") : t("Refresh"),
-  );
-  refreshButton.disabled = reading != null;
-  const more = h("button", { class: "icon", onclick: () => void Bridge.openUrl(MORE) }, svg(OUT_ICON, 13, { stroke: 2.2 }), t("Get more on claude.ai"));
-  body.append(h("div", { class: "head" },
-    h("div", {},
-      h("h1", { text: t("Connectors") }),
-      h("p", { text: t("Connect Claude Code to the apps you use. Auth opens the service's sign-in page in your browser, and Claude Code keeps the sign-in for every project.") }),
+/** What the search field holds, and claude.ai's connectors it matched that the list lacks. */
+let query = "";
+let found: DirConnector[] = [];
+let searchFailure = "";
+let searchRun = 0;
+
+const moreButton = () =>
+  h("button", { class: "icon", onclick: () => void Bridge.openUrl(MORE) }, svg(OUT_ICON, 13, { stroke: 2.2 }), t("Get more on claude.ai"));
+
+const matches = (e: McpEntry) => !query || e.name.toLowerCase().includes(query.toLowerCase());
+
+/** A connector of claude.ai the list lacks: its page there switches it on. */
+function foundCard(f: DirConnector): HTMLElement {
+  return h("div", { class: "conn" },
+    markTile(f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), f.name),
+    h("div", { class: "conn-text" },
+      h("div", { class: "conn-name", text: f.name, title: f.name }),
+      h("div", { class: "conn-sub", text: f.summary, title: f.summary }),
     ),
-    h("div", { class: "head-actions" }, refreshButton, more),
-  ));
-  if (failure) body.append(h("div", { class: "notice err", text: failure }));
+    h("button", { text: t("Open"), onclick: () => void Bridge.openUrl(f.page) }),
+  );
+}
+
+function fill(content: HTMLElement) {
+  if (failure) content.append(h("div", { class: "notice err", text: failure }));
+  let any = false;
   for (const [group, label] of GROUPS) {
-    const list = entries.filter((e) => e.group === group);
+    const list = entries.filter((e) => e.group === group && matches(e));
     if (!list.length) continue;
-    body.append(h("section", { class: "group" },
+    any = true;
+    content.append(h("section", { class: "group" },
       h("h3", { text: t(label) }),
       h("div", { class: "grid" }, ...list.map(card)),
     ));
   }
-  body.append(h("div", { class: "row" },
+  if (query && found.length) {
+    content.append(h("section", { class: "group" },
+      h("h3", { text: t("More on claude.ai") }),
+      h("div", { class: "grid" }, ...found.map(foundCard)),
+    ));
+  } else if (query && searchFailure) {
+    content.append(h("div", { class: "notice err", text: searchFailure }));
+  } else if (query && !any) {
+    content.append(h("div", { class: "hint", text: t("No results") }));
+  }
+  content.append(h("div", { class: "row" },
     h("div", {
       class: "hint",
       text: t("Services via claude.ai are signed in on claude.ai: Auth opens the service's page there, and Claude Code picks it up from the same account."),
     }),
-    h("button", { class: "icon", onclick: () => void Bridge.openUrl(MORE) }, svg(OUT_ICON, 13, { stroke: 2.2 }), t("Get more on claude.ai")),
+    moreButton(),
   ));
 }
 
+/** The list follows the field at once; claude.ai's directory answers a moment later. */
+function search(q: string) {
+  query = q;
+  found = [];
+  searchFailure = "";
+  redraw();
+  if (!q) return;
+  const run = ++searchRun;
+  Bridge.connectorSearch(q)
+    .then((list) => {
+      if (run !== searchRun) return;
+      found = list;
+      redraw();
+    })
+    .catch((err) => {
+      if (run !== searchRun) return;
+      searchFailure = message(err);
+      redraw();
+    });
+}
+
 export function connectorsPage(): HTMLElement {
-  const body = h("div", { class: "page" });
+  const refreshButton = h("button", { class: "icon", onclick: () => void refresh() });
+  const content = h("div", { class: "page-sections" });
+  const body = h("div", { class: "page" },
+    h("div", { class: "head" },
+      h("div", {},
+        h("h1", { text: t("Connectors") }),
+        h("p", { text: t("Connect Claude Code to the apps you use. Auth opens the service's sign-in page in your browser, and Claude Code keeps the sign-in for every project.") }),
+      ),
+      h("div", { class: "head-actions" }, refreshButton, moreButton()),
+    ),
+    searchBox(t("Search connectors…"), query, search),
+    content,
+  );
+  // Only the list redraws: the field keeps the focus while states come in.
   shown = {
     body,
     draw: () => {
-      clear(body);
-      fill(body);
+      clear(refreshButton);
+      refreshButton.append(svg(REFRESH_ICON, 14, { stroke: 2.4 }), reading ? t("Checking…") : t("Refresh"));
+      refreshButton.disabled = reading != null;
+      clear(content);
+      fill(content);
     },
   };
   if (!entries.length) {

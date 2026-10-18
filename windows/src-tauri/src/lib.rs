@@ -599,6 +599,8 @@ pub fn run() {
             chat::local_set_key,
             directory::directory_categories,
             directory::directory_section,
+            directory::directory_search,
+            directory::connector_search,
             directory::plugin_install,
             directory::plugin_uninstall,
             open_settings_window,
