@@ -23,6 +23,7 @@ mod platform;
 mod secrets;
 mod session_window;
 mod settings;
+mod setup;
 mod terminal;
 mod tray;
 #[cfg(windows)]
@@ -520,9 +521,13 @@ pub fn show_settings_window(app: &AppHandle) {
     let _ = win.set_focus();
 }
 
+/// `page`: the Settings page to show (settings/main.ts PageId), else the one it was on.
 #[tauri::command]
-fn open_settings_window(app: AppHandle) {
+fn open_settings_window(app: AppHandle, page: Option<String>) {
     show_settings_window(&app);
+    if let Some(page) = page {
+        let _ = app.emit_to("settings", "settings-page", page);
+    }
 }
 
 pub fn run() {
@@ -572,6 +577,8 @@ pub fn run() {
             claude_plan_usage,
             mcp::mcp_catalog,
             mcp::mcp_status,
+            setup::setup_status,
+            setup::setup_start,
             mcp::mcp_connect,
             mcp::mcp_cancel,
             approval_decision,

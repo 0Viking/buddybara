@@ -587,12 +587,14 @@ static RUNS: LazyLock<Mutex<HashMap<u64, u32>>> = LazyLock::new(Default::default
 /// and whether they may read the inbox (they started with files).
 static INPUTS: LazyLock<Mutex<HashMap<u64, (Sender<String>, bool)>>> = LazyLock::new(Default::default);
 
-/// `claude`, from %PATH% or where its installer puts it.
+/// `claude`, from %PATH% or where its installer or winget puts it: installed
+/// while Buddybara runs, it is on a PATH this process started too early to see.
 pub(crate) fn claude_exe() -> Option<PathBuf> {
     platform::find_on_path("claude").or_else(|| {
         let exe = if cfg!(windows) { "claude.exe" } else { "claude" };
-        let path = platform::home_dir().join(".local").join("bin").join(exe);
-        path.is_file().then_some(path)
+        let native = platform::home_dir().join(".local").join("bin").join(exe);
+        let winget = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join(r"Microsoft\WinGet\Links\claude.exe"));
+        std::iter::once(native).chain(winget).find(|p| p.is_file())
     })
 }
 
