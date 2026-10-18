@@ -1,26 +1,96 @@
 # Buddybara
 
-A Windows desktop buddy for Claude Code, forked from [Coucou](https://github.com/Louis-CFM/coucou):
-the buddy floats on the desktop, and a click on it opens a panel with your projects, their
-Claude Code sessions and the conversation — no editor needed.
+**A capybara on your Windows desktop that runs Claude Code for you.** Buddybara floats wherever
+you drop it, with a mikan on its head. Click it and a panel opens with your projects, their Claude
+Code sessions and the conversation, so you can keep working with Claude without an editor or a
+terminal.
 
-> **License.** The code is MIT ([LICENSE](../LICENSE)); Coucou's copyright notice stays in it, as MIT
-> requires. The name, the capybara character, its icon and the sounds are this repository's own.
+### [⬇ Download Buddybara for Windows](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)
 
-## What it adds to Coucou
+Windows 10 or 11 (64-bit) · free and open source · no admin rights needed ·
+[all releases](https://github.com/0Viking/buddybara/releases)
 
-- **Buddy mode**: Buddybara stays wherever you drop it. Click it to open or close the panel beside it.
-- **Projects panel**: the folders in `%USERPROFILE%\projects`, each one's sessions, the conversation,
-  and a box to keep chatting. Pick the mode (Manual, Edit automatically, Plan, Auto) and the effort.
-- **Permission requests and questions** show in the panel. A session that finishes opens it.
-- **Game mode**: nothing pops up while a game or a video is full screen.
-- **Plan usage on the mikan**: your Claude plan's usage, once Plan usage is on (step 4).
+### What it does
 
-## Install on a new PC
+- **Your projects and conversations, one click away.** Pick a project, open a session or start a
+  new one, and chat with Claude Code. Choose the mode (Manual, Edit automatically, Plan, Auto), the
+  effort and the model. Send a message while Claude works and it reads it at its next step.
+- **Permission requests and questions come to you.** They show in the panel, and nothing is
+  approved without your click. A session that finishes lets you know.
+- **Quiet while you play.** Nothing pops up while a game or a video is full screen.
+- **Your plan's usage on the mikan**, so you see how much of your Claude plan is left.
+- **A real terminal** for any conversation, when you want Claude Code's own screen.
+- **Skills, plugins and connectors** from Anthropic's Directory, searchable and installed for
+  Claude Code in one click.
+- **More than Claude Code:** Codex, Gemini CLI, Cursor and other agents show their work here too;
+  chat with other models (OpenAI, Google, OpenRouter, Ollama, LM Studio); and keep an eye on
+  GitHub, Vercel, Stripe and other services in the Services tab.
+- **In 10 languages**: English, 中文, हिन्दी, Español, العربية, Français, বাংলা, Português, Русский,
+  Bahasa Indonesia.
+- **Private by design.** No telemetry; keys stay in Windows Credential Manager; it only talks to
+  the services you set up.
 
-Run everything in **PowerShell**, as your normal user. Only the Build Tools ask for admin rights.
+### What you need
 
-### 1. Tools (once per PC)
+- A Claude account with Claude Code (a Pro, Max, Team or Enterprise plan, or an Anthropic Console
+  account).
+- That's all. You don't need VS Code, Visual Studio, Node or anything else: Buddybara's first-run
+  screen installs Claude Code for you if it's missing.
+
+## Install
+
+1. **[Download the installer](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)**
+   and run it.
+2. Windows may say **"Windows protected your PC"**: the installer isn't code-signed yet. Click
+   **More info → Run anyway**.
+3. Buddybara appears at the bottom right of your screen. Drag it wherever you like.
+
+## First run
+
+Click Buddybara. The first time, the panel shows what's left to set up:
+
+1. **Claude Code**: if it isn't installed, **Install** sets it up with winget in a window of its own.
+2. **Sign in**: opens your browser to sign in to your Claude account.
+3. **Projects folder**: the folder whose subfolders are your projects (`%USERPROFILE%\projects`
+   unless you change it).
+4. **Claude Code hooks**: let Buddybara see your sessions and show their permission requests. It
+   opens Settings, shows you the exact change to Claude Code's settings, and writes nothing until
+   you confirm. Restart any Claude Code session that was already open.
+
+Then click **Start**. Optional, in Settings (the gear in the panel, or right-click the capybara in
+the notification area): **Launch at startup**, your plan's usage on the mikan, other agents, other
+AI models, skills, plugins, connectors and services.
+
+If you hide the buddy (the button at the top right of its head), start Buddybara again from the
+Start menu. While it runs, starting it again opens the panel.
+
+## Update
+
+Download the [latest installer](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)
+and run it. Your settings, keys and hooks are kept.
+
+## Uninstall
+
+1. Optional: Settings → Claude Code → remove the **Claude Code hooks**. If you leave them, they do
+   nothing once Buddybara is gone.
+2. Windows Settings → Apps → **Buddybara** → Uninstall.
+3. For a complete cleanup, also delete `%APPDATA%\Buddybara`.
+
+## If something's off
+
+- **Buddybara doesn't react when Claude works**: the hooks aren't installed (first run, step 4), or
+  that Claude Code session started before they were. Restart it.
+- **"Claude Code isn't installed" in the panel**: run the first-run screen's Install, or check that
+  `claude --version` works in a new PowerShell.
+- **Logs**: `%LOCALAPPDATA%\Buddybara\buddybara.log`.
+- **Antivirus warnings**: Buddybara is unsigned and new, so Windows Defender's machine-learning
+  scan can flag it by mistake. You can report a false positive to Microsoft at
+  [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/wdsi/filesubmission). At work,
+  check your IT rules before installing.
+
+## Build from source
+
+For developers. In PowerShell, as your normal user (only the Build Tools ask for admin rights):
 
 ```powershell
 winget install Git.Git
@@ -29,93 +99,22 @@ winget install Rustlang.Rustup
 winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
 
-Then **close and reopen PowerShell**, so the new tools are on your PATH.
-
-### 2. Claude Code
-
-```powershell
-irm https://claude.ai/install.ps1 | iex
-```
-
-Open a new PowerShell and run `claude` once: sign in in the browser, then type `/exit`.
-
-### 3. Get the code and build it
+Close and reopen PowerShell, then:
 
 ```powershell
 cd $env:USERPROFILE
 git clone https://github.com/0Viking/buddybara.git
 cd buddybara\windows
 npm ci
-npx tauri build --no-bundle
+npx tauri build --no-bundle    # the app: windows\target\release\Buddybara.exe
+npm run pack                   # or the installer: windows\release\
 ```
 
-The first build takes several minutes. The app is `windows\target\release\Buddybara.exe`.
+Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v0.4.0`, matching
+`windows/src-tauri/tauri.conf.json`) publishes the installer as a GitHub release.
 
-### 4. First run
+## License
 
-1. Start `windows\target\release\Buddybara.exe`. Buddybara appears at the bottom right: drag it wherever you like.
-2. Right-click the capybara icon in the notification area (bottom right of the taskbar) → **Settings…** →
-   install the **Claude Code hooks**, check the change it shows, and confirm.
-   Restart any Claude Code session that was already open.
-3. Optional, in the same Settings: **Plan usage** (the % on the mikan) and **Launch at startup**.
-
-### 5. Desktop shortcut
-
-In PowerShell (the path is where step 3 put the app):
-
-```powershell
-$exe = "$env:USERPROFILE\buddybara\windows\target\release\Buddybara.exe"
-$link = (New-Object -ComObject WScript.Shell).CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Buddybara.lnk")
-$link.TargetPath = $exe
-$link.WorkingDirectory = Split-Path $exe
-$link.IconLocation = "$exe,0"
-$link.Save()
-```
-
-Double-click **Buddybara** on the desktop to start it. If it's already running, the same
-double-click opens the panel. Rebuilding replaces the app in place, so the shortcut keeps working.
-Right-click it → **Pin to Start** or **Pin to taskbar** for those too.
-
-Put it in the Start menu as well. That's where you start Buddybara again after hiding the buddy
-with the button at the top right of its head (it shows while the pointer is over it):
-
-```powershell
-Copy-Item "$([Environment]::GetFolderPath('Desktop'))\Buddybara.lnk" ([Environment]::GetFolderPath('Programs'))
-```
-
-### Projects in another folder?
-
-The panel lists the folders inside `%USERPROFILE%\projects`. If yours live elsewhere, say `D:\repos`:
-
-```powershell
-setx BUDDYBARA_PROJECTS "D:\repos"
-```
-
-Then quit Buddybara (right-click the notification-area icon → Quit) and start it again. If the list doesn't change,
-sign out of Windows and back in.
-
-## Update
-
-Quit Buddybara first: Windows locks a running app, so the build can't replace it.
-
-```powershell
-cd $env:USERPROFILE\buddybara
-git pull
-cd windows
-npm ci
-npx tauri build --no-bundle
-```
-
-## Uninstall
-
-1. Settings → remove the **Claude Code hooks**, so Claude Code stops calling Buddybara.
-2. Quit Buddybara, then delete the `buddybara` folder, `%LOCALAPPDATA%\Buddybara` and `%APPDATA%\Buddybara`.
-
-## If something's off
-
-- **Buddybara doesn't react when Claude works**: the hooks aren't installed (step 4.2), or that
-  Claude Code session started before they were. Restart it.
-- **"Claude Code isn't installed" in the panel**: `claude --version` must work in a new PowerShell.
-- **Logs**: `%LOCALAPPDATA%\Buddybara\buddybara.log`.
-- **Antivirus or IT warnings**: a self-built, unsigned app can be flagged. That is expected for
-  something built from source; check your workplace's rules before installing tools.
+Buddybara is a fork of [Coucou](https://github.com/Louis-CFM/coucou). The code is MIT
+([LICENSE](../LICENSE)), and Coucou's copyright notice stays in it, as MIT requires. The name, the
+capybara character, its icon and the sounds are this repository's own.
