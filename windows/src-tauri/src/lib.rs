@@ -6,6 +6,7 @@ mod claude;
 mod code;
 mod config_file;
 mod desktop;
+mod directory;
 mod files;
 mod github;
 mod hooks;
@@ -596,6 +597,10 @@ pub fn run() {
             chat::chat_send,
             chat::local_connect,
             chat::local_set_key,
+            directory::directory_categories,
+            directory::directory_section,
+            directory::plugin_install,
+            directory::plugin_uninstall,
             open_settings_window,
             desktop::desktop_buddybara_info,
             desktop::desktop_buddybara_drag_begin,

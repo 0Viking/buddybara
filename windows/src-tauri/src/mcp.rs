@@ -20,15 +20,16 @@ use crate::platform;
 enum Via {
     /// A remote MCP server with OAuth: added at user scope, then `claude mcp login`.
     Remote { transport: &'static str, url: &'static str },
-    /// A claude.ai connector: its provider only signs in apps it registered
-    /// itself (no client registration for Claude Code), Anthropic's among them.
-    ClaudeAi,
+    /// A claude.ai connector, switched on from its page on claude.ai
+    /// (claude.ai/directory/<page>); Claude Code then lists it as "claude.ai
+    /// <aka>" (`aka`: claude.ai's name, when it isn't `name`).
+    ClaudeAi { page: &'static str, aka: &'static str },
 }
 
 struct Service {
     id: &'static str,
     name: &'static str,
-    /// Where the page lists it: "work" | "design" | "dev" | "business".
+    /// Where the page lists it: "work" | "design" | "dev" | "business" | "everyday".
     group: &'static str,
     via: Via,
 }
@@ -41,8 +42,12 @@ const fn sse(id: &'static str, name: &'static str, group: &'static str, url: &'s
     Service { id, name, group, via: Via::Remote { transport: "sse", url } }
 }
 
-const fn claude_ai(id: &'static str, name: &'static str, group: &'static str) -> Service {
-    Service { id, name, group, via: Via::ClaudeAi }
+const fn claude_ai(id: &'static str, name: &'static str, group: &'static str, page: &'static str) -> Service {
+    Service { id, name, group, via: Via::ClaudeAi { page, aka: "" } }
+}
+
+const fn claude_ai_as(id: &'static str, name: &'static str, group: &'static str, page: &'static str, aka: &'static str) -> Service {
+    Service { id, name, group, via: Via::ClaudeAi { page, aka } }
 }
 
 /// Official servers only, from the MCP Registry (registry.modelcontextprotocol.io)
@@ -56,20 +61,32 @@ const CATALOG: &[Service] = &[
     http("clickup", "ClickUp", "work", "https://mcp.clickup.com/mcp"),
     http("dropbox", "Dropbox", "work", "https://mcp.dropbox.com/mcp"),
     http("fireflies", "Fireflies", "work", "https://api.fireflies.ai/mcp"),
-    claude_ai("gmail", "Gmail", "work"),
-    claude_ai("google-calendar", "Google Calendar", "work"),
+    claude_ai("gmail", "Gmail", "work", "2701e52f-b826-4aaf-8b25-11f2a97c98b0"),
+    claude_ai("google-calendar", "Google Calendar", "work", "2a838eaa-f7b4-4bc2-bd47-c326f3c813c5"),
+    claude_ai("google-drive", "Google Drive", "work", "b89f7865-a755-4f86-8062-c3bd651740ce"),
+    claude_ai("box", "Box", "work", "a5380429-c773-4180-b642-301418240c8c"),
+    claude_ai("docusign", "Docusign", "work", "a876b642-2b05-4808-a565-deeb271802fd"),
+    claude_ai("smartsheet", "Smartsheet", "work", "688b7b3f-efc4-45a6-83af-d2760ef9e96f"),
+    claude_ai_as("zoom", "Zoom", "work", "1ed68a66-c371-4d26-82dc-28e6c260ece8", "Zoom for Claude"),
+    claude_ai("wispr-flow", "Wispr Flow", "work", "958b6948-97e4-4315-9ee5-82254f617557"),
+    claude_ai("pubmed", "PubMed", "work", "81cc5080-a204-4aa1-a694-fa868a3c8721"),
+    claude_ai("consensus", "Consensus", "work", "65247229-f0c7-49df-9044-fcbb8b3894c6"),
     http("granola", "Granola", "work", "https://mcp.granola.ai/mcp"),
     http("intercom", "Intercom", "work", "https://mcp.intercom.com/mcp"),
     http("linear", "Linear", "work", "https://mcp.linear.app/mcp"),
     http("lucid", "Lucid", "work", "https://mcp.lucid.app/mcp"),
-    claude_ai("microsoft-365", "Microsoft 365", "work"),
+    claude_ai("microsoft-365", "Microsoft 365", "work", "ce0c9cda-5ea5-44c5-9cf2-40810dfa6582"),
     http("miro", "Miro", "work", "https://mcp.miro.com/"),
     http("monday", "monday.com", "work", "https://mcp.monday.com/mcp"),
     http("notion", "Notion", "work", "https://mcp.notion.com/mcp"),
-    claude_ai("slack", "Slack", "work"),
+    claude_ai("slack", "Slack", "work", "597f662f-36de-437e-836e-5a81013cbfbe"),
     http("todoist", "Todoist", "work", "https://ai.todoist.net/mcp"),
     http("zapier", "Zapier", "work", "https://mcp.zapier.com/api/v1/connect"),
     http("canva", "Canva", "design", "https://mcp.canva.com/mcp"),
+    claude_ai("adobe", "Adobe", "design", "22854937-9510-4b57-9230-62c820102d8f"),
+    claude_ai("excalidraw", "Excalidraw", "design", "934bf25a-e0d1-43ff-a488-b2c5567ec956"),
+    claude_ai("lovable", "Lovable", "design", "1d9dadfe-0a7d-4a47-af18-101ae0ae0efd"),
+    claude_ai("vidiq", "vidIQ", "design", "dc5bb20f-6ebd-4dbe-a47e-c2d20fa25acc"),
     sse("cloudinary", "Cloudinary", "design", "https://asset-management.mcp.cloudinary.com/sse"),
     http("contentful", "Contentful", "design", "https://mcp.contentful.com/mcp"),
     http("figma", "Figma", "design", "https://mcp.figma.com/mcp"),
@@ -79,6 +96,10 @@ const CATALOG: &[Service] = &[
     http("wix", "Wix", "design", "https://mcp.wix.com/mcp"),
     http("wordpress", "WordPress.com", "design", "https://public-api.wordpress.com/wpcom/v2/mcp/v1"),
     http("cloudflare", "Cloudflare", "dev", "https://bindings.mcp.cloudflare.com/mcp"),
+    claude_ai("context7", "Context7", "dev", "37153cd7-b17c-470e-8b46-007e2859e0f3"),
+    claude_ai("datadog", "Datadog", "dev", "68268024-1a91-4316-a9e1-14ecb814cb18"),
+    claude_ai_as("bigquery", "BigQuery", "dev", "7c316b77-98a0-4dbb-8b54-a96ae26a884f", "Google Cloud BigQuery"),
+    claude_ai("microsoft-learn", "Microsoft Learn", "dev", "89a7ddf5-2a6b-410c-be11-aa0e1a1b35a6"),
     http("gitlab", "GitLab", "dev", "https://gitlab.com/api/v4/mcp"),
     http("grafana", "Grafana", "dev", "https://mcp.grafana.com/mcp"),
     http("huggingface", "Hugging Face", "dev", "https://huggingface.co/mcp?login"),
@@ -95,7 +116,15 @@ const CATALOG: &[Service] = &[
     http("amplitude", "Amplitude", "business", "https://mcp.amplitude.com/mcp"),
     http("attio", "Attio", "business", "https://mcp.attio.com/mcp"),
     http("cal-com", "Cal.com", "business", "https://mcp.cal.com/mcp"),
-    claude_ai("hubspot", "HubSpot", "business"),
+    claude_ai("hubspot", "HubSpot", "business", "875dee50-9b3f-452b-af8c-fbc839966273"),
+    claude_ai("shopify", "Shopify", "business", "80917cb7-3071-4fca-b053-a4262d356c60"),
+    claude_ai_as("quickbooks", "QuickBooks", "business", "a933e343-3389-4a82-beeb-7d5f5c2c4f25", "Intuit QuickBooks"),
+    claude_ai("apollo", "Apollo.io", "business", "8fd555a4-ea5f-49cf-9335-582dd6760597"),
+    claude_ai("ahrefs", "Ahrefs", "business", "098cb32a-ba21-4770-97dd-78bb54655419"),
+    claude_ai("semrush", "Semrush", "business", "8194f7ea-e733-4e80-bd77-e504fd4ed5e5"),
+    claude_ai("zoominfo", "ZoomInfo", "business", "f2cdf1b8-2f75-48a4-8d8c-8d9cce1b8643"),
+    claude_ai("windsor", "Windsor.ai", "business", "360c0c31-4bb6-42ca-8e50-5da0a100a68e"),
+    claude_ai_as("supermetrics", "Supermetrics", "business", "cc599e7b-8c59-4e89-9bf0-36d47bb9ec80", "Supermetrics Marketing Analytics"),
     http("klaviyo", "Klaviyo", "business", "https://mcp.klaviyo.com/mcp"),
     http("mercury", "Mercury", "business", "https://mcp.mercury.com/mcp"),
     http("mixpanel", "Mixpanel", "business", "https://mcp.mixpanel.com/mcp"),
@@ -104,10 +133,15 @@ const CATALOG: &[Service] = &[
     http("ramp", "Ramp", "business", "https://mcp.ramp.com/mcp"),
     sse("square", "Square", "business", "https://mcp.squareup.com/sse"),
     http("stripe", "Stripe", "business", "https://mcp.stripe.com"),
+    claude_ai("spotify", "Spotify", "everyday", "86925244-b3bb-415b-b7e8-6e3cd1392247"),
+    claude_ai("strava", "Strava", "everyday", "135cc9eb-d5aa-4e24-81b0-6e78a3cff862"),
+    claude_ai("booking", "Booking.com", "everyday", "487a895f-84d3-4c21-925f-c6c3552b94cc"),
+    claude_ai("expedia", "Expedia", "everyday", "21506a18-96ae-40d0-9a9d-1433e08a8bc4"),
+    claude_ai("indeed", "Indeed", "everyday", "78cb9092-b837-4439-845d-fdccd5723e7f"),
 ];
 
-/// Where claude.ai connectors are switched on.
-const CLAUDE_AI_CONNECTORS: &str = "https://claude.ai/customize/connectors";
+/// A claude.ai connector's own page, where it is switched on.
+const CLAUDE_AI_DIRECTORY: &str = "https://claude.ai/directory/";
 /// A sign-in the user walks away from is given up after this long.
 const LOGIN_LIMIT: Duration = Duration::from_secs(300);
 /// `claude mcp list` checks every server it lists.
@@ -197,7 +231,11 @@ fn entries(listed: &[(String, &'static str)]) -> Vec<Entry> {
             let mut state = "missing";
             for (i, (name, st)) in listed.iter().enumerate() {
                 let k = key(name);
-                if k == key(s.id) || k == key(s.name) {
+                let aka = match s.via {
+                    Via::ClaudeAi { aka, .. } if !aka.is_empty() => key(aka),
+                    _ => String::new(),
+                };
+                if k == key(s.id) || k == key(s.name) || (!aka.is_empty() && k == aka) {
                     used[i] = true;
                     if rank(st) > rank(state) {
                         state = st;
@@ -210,7 +248,7 @@ fn entries(listed: &[(String, &'static str)]) -> Vec<Entry> {
                 state,
                 group: s.group,
                 catalog: true,
-                claude_ai: matches!(s.via, Via::ClaudeAi),
+                claude_ai: matches!(s.via, Via::ClaudeAi { .. }),
             }
         })
         .collect();
@@ -247,7 +285,7 @@ fn last_line(text: &str) -> Option<String> {
 
 /// `claude` with `args`, from the home folder, with no console window, given up
 /// after `limit`. Its output, or what it said went wrong.
-fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
+pub(crate) fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
     let exe = crate::code::claude_exe().ok_or_else(|| t("Claude Code isn't installed: `claude` was not found."))?;
     let mut cmd = Command::new(exe);
     cmd.args(args)
@@ -266,7 +304,7 @@ fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
         }
         if started.elapsed() > limit {
             let _ = child.kill();
-            return Err(t("Gave up waiting: the sign-in wasn't finished in time."));
+            return Err(t("Claude Code took too long to answer."));
         }
         std::thread::sleep(Duration::from_millis(200));
     };
@@ -398,8 +436,8 @@ pub async fn mcp_status() -> Result<Vec<Entry>, String> {
 pub async fn mcp_connect(id: String, again: bool) -> Result<(), String> {
     let service = CATALOG.iter().find(|s| s.id == id).ok_or_else(|| format!("unknown service {id}"))?;
     match service.via {
-        Via::ClaudeAi => {
-            platform::open_url(CLAUDE_AI_CONNECTORS);
+        Via::ClaudeAi { page, .. } => {
+            platform::open_url(&format!("{CLAUDE_AI_DIRECTORY}{page}"));
             Ok(())
         }
         Via::Remote { transport, url } => {

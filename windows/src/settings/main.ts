@@ -13,6 +13,7 @@ import { agentsPage } from "./agents";
 import { connectorsPage } from "./connectors";
 import { INTEGRATION_KEYS, integrationsPage } from "./integrations";
 import { MODEL_KEYS, modelsPage } from "./models";
+import { directoryPage } from "./directory";
 import {
   LANGUAGES, N_, isRtl, onLanguageChange, resolveLanguage, setLanguage, systemLanguages, t,
 } from "../i18n/i18n";
@@ -396,13 +397,15 @@ function languageSelect(): HTMLElement {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-type PageId = "general" | "claude" | "agents" | "models" | "connectors" | "integrations";
+type PageId = "general" | "claude" | "agents" | "models" | "skills" | "plugins" | "connectors" | "integrations";
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "general", label: N_("General"), icon: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4" },
   { id: "claude", label: "Claude Code", icon: "M4 6l6 6-6 6M12 18h8" },
   { id: "agents", label: N_("Agents"), icon: "M8 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M16 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0" },
   { id: "models", label: N_("AI models"), icon: "M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4zM9 10h6" },
+  { id: "skills", label: N_("Skills"), icon: "M13 3 4 14h7l-1 7 9-11h-7z" },
+  { id: "plugins", label: N_("Plugins"), icon: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12 4 7.5" },
   { id: "connectors", label: N_("Connectors"), icon: "M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4" },
   { id: "integrations", label: N_("Integrations"), icon: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
 ];
@@ -510,6 +513,8 @@ async function render() {
     body = integrationsPage(settings, save, present);
   } else if (page === "agents") {
     body = agentsPage(await Bridge.agentHooksList());
+  } else if (page === "skills" || page === "plugins") {
+    body = directoryPage(page);
   } else if (page === "connectors") {
     body = connectorsPage();
   } else {

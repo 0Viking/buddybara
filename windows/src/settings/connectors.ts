@@ -14,6 +14,7 @@ const GROUPS: [group: string, label: string][] = [
   ["design", N_("Design & content")],
   ["dev", N_("Developers")],
   ["business", N_("Business")],
+  ["everyday", N_("Everyday")],
   ["other", N_("Other servers")],
 ];
 
@@ -27,6 +28,9 @@ const STATE_TEXT: Record<McpEntry["state"], string> = {
 };
 
 const REFRESH_ICON = "M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7";
+const OUT_ICON = "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5";
+/** Every connector of claude.ai's directory: thousands more than these. */
+const MORE = "https://claude.ai/customize/connectors";
 
 let entries: McpEntry[] = [];
 /** The states have been read at least once (until then the dots are grey). */
@@ -150,12 +154,13 @@ function fill(body: HTMLElement) {
     reading ? t("Checking…") : t("Refresh"),
   );
   refreshButton.disabled = reading != null;
+  const more = h("button", { class: "icon", onclick: () => void Bridge.openUrl(MORE) }, svg(OUT_ICON, 13, { stroke: 2.2 }), t("Get more on claude.ai"));
   body.append(h("div", { class: "head" },
     h("div", {},
       h("h1", { text: t("Connectors") }),
       h("p", { text: t("Connect Claude Code to the apps you use. Auth opens the service's sign-in page in your browser, and Claude Code keeps the sign-in for every project.") }),
     ),
-    refreshButton,
+    h("div", { class: "head-actions" }, refreshButton, more),
   ));
   if (failure) body.append(h("div", { class: "notice err", text: failure }));
   for (const [group, label] of GROUPS) {
@@ -166,10 +171,13 @@ function fill(body: HTMLElement) {
       h("div", { class: "grid" }, ...list.map(card)),
     ));
   }
-  body.append(h("div", {
-    class: "hint",
-    text: t("Services via claude.ai are signed in on claude.ai: Auth opens your connectors there, and Claude Code picks them up from the same account."),
-  }));
+  body.append(h("div", { class: "row" },
+    h("div", {
+      class: "hint",
+      text: t("Services via claude.ai are signed in on claude.ai: Auth opens the service's page there, and Claude Code picks it up from the same account."),
+    }),
+    h("button", { class: "icon", onclick: () => void Bridge.openUrl(MORE) }, svg(OUT_ICON, 13, { stroke: 2.2 }), t("Get more on claude.ai")),
+  ));
 }
 
 export function connectorsPage(): HTMLElement {

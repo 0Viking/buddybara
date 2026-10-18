@@ -162,6 +162,15 @@ export const Bridge = {
   /** The OpenAI-compatible server's key, bound to the address it is typed for. */
   localSetKey: (url: string, key: string) => callOrThrow<void>("local_set_key", { url, key }),
 
+  // ── Skills and plugins of Anthropic's Directory (src-tauri/src/directory.rs) ─
+  /** The departments of skills or plugins, most entries first. */
+  directoryCategories: (kind: DirKind) => callOrThrow<DirCategory[]>("directory_categories", { kind }),
+  /** The most used entries of one department. */
+  directorySection: (kind: DirKind, category: string) => callOrThrow<DirEntry[]>("directory_section", { kind, category }),
+  /** Installs a Directory entry for Claude Code (`claude plugin install`, user scope). */
+  pluginInstall: (id: string) => callOrThrow<void>("plugin_install", { id }),
+  pluginUninstall: (id: string) => callOrThrow<void>("plugin_uninstall", { id }),
+
   // ── Connectors: Claude Code's MCP servers (src-tauri/src/mcp.rs) ──────────
   /** The catalog alone, at once (every state "missing"). */
   mcpCatalog: async () => (await call<McpEntry[]>("mcp_catalog")) ?? [],
@@ -276,6 +285,32 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+}
+
+export type DirKind = "skills" | "plugins";
+
+/** A department of the Directory and how many entries it has (directory.rs Category). */
+export interface DirCategory {
+  id: string;
+  count: number;
+}
+
+/** A skill or plugin of the Directory (directory.rs Entry). */
+export interface DirEntry {
+  id: string;
+  name: string;
+  summary: string;
+  publisher: string;
+  /** "anthropic" | "partner" | "community" */
+  tier: string;
+  skills: number;
+  commands: number;
+  agents: number;
+  hooks: number;
+  servers: number;
+  /** Claude Code knows how to install it. */
+  installable: boolean;
+  installed: boolean;
 }
 
 /** A model a chat provider offers (chat.rs ModelInfo). */
