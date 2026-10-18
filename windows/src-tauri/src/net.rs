@@ -5,12 +5,17 @@
 // hostile server (a local model address can point anywhere) cannot make the
 // app hold an unbounded amount of memory.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 use reqwest::Url;
 
 use crate::i18n::{t, tf};
+
+/// Ceiling for a JSON answer: a chat reply or a model list.
+pub const MAX_BODY: usize = 8 * 1024 * 1024;
+/// Ceiling for an error body: only its message is shown.
+pub const MAX_ERROR_BODY: usize = 64 * 1024;
 
 /// True for an address that is this machine: `localhost`, 127.0.0.0/8, ::1,
 /// and the unspecified addresses (0.0.0.0, ::), which connect to this machine.
@@ -32,6 +37,47 @@ pub fn is_loopback_host(host: &str) -> bool {
 
 pub fn is_loopback_url(url: &Url) -> bool {
     url.host_str().is_some_and(is_loopback_host)
+}
+
+/// The address of a model server as the user typed or pasted it, cleaned up:
+/// a missing scheme becomes `http://`, trailing slashes and the documentation
+/// sub-paths people paste (`/api`, `/v1`) go, and the loopback names become
+/// 127.0.0.1 — on Windows `localhost` may resolve to ::1 first while Ollama
+/// only listens on IPv4. Only http and https, and no `user:password@`.
+pub fn normalise_server_url(raw: &str) -> Result<Url, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err(t("Enter the server address first."));
+    }
+    let with_scheme = if raw.contains("://") { raw.to_string() } else { format!("http://{raw}") };
+    let mut url = Url::parse(&with_scheme).map_err(|_| tf("Not a valid address: {address}", &[("address", raw)]))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(t("The address must start with http:// or https://."));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(t("Leave the user name and password out of the address."));
+    }
+    if url.host_str().is_none_or(str::is_empty) {
+        return Err(tf("Not a valid address: {address}", &[("address", raw)]));
+    }
+    if is_loopback_url(&url) {
+        let _ = url.set_ip_host(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    }
+    let mut path = url.path().trim_end_matches('/').to_string();
+    for suffix in ["/api", "/v1"] {
+        if let Some(rest) = path.strip_suffix(suffix) {
+            path = rest.trim_end_matches('/').to_string();
+        }
+    }
+    url.set_path(&path);
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url)
+}
+
+/// `base` + `tail`, with exactly one slash between them.
+pub fn join(base: &Url, tail: &str) -> String {
+    format!("{}/{}", base.as_str().trim_end_matches('/'), tail.trim_start_matches('/'))
 }
 
 /// A client for `url`: requests to this machine skip any system proxy, which
@@ -59,6 +105,28 @@ pub async fn read_capped(mut response: reqwest::Response, limit: usize) -> Resul
         body.extend_from_slice(&chunk);
     }
     Ok(body)
+}
+
+/// The text of an error body, cut down for a message: `error.message`
+/// (OpenAI), a bare `error` string (Ollama), or the first characters.
+pub fn error_detail(body: &[u8]) -> String {
+    let text = String::from_utf8_lossy(body);
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+        if let Some(m) = v.pointer("/error/message").and_then(|m| m.as_str()) {
+            return m.to_string();
+        }
+        if let Some(m) = v.get("error").and_then(|m| m.as_str()) {
+            return m.to_string();
+        }
+        if let Some(m) = v.get("message").and_then(|m| m.as_str()) {
+            return m.to_string();
+        }
+        // Gemini answers some errors as a one-element array.
+        if let Some(m) = v.pointer("/0/error/message").and_then(|m| m.as_str()) {
+            return m.to_string();
+        }
+    }
+    text.trim().chars().take(200).collect()
 }
 
 #[cfg(test)]

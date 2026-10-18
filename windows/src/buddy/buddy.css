@@ -1119,6 +1119,10 @@
   color: var(--green);
 }
 
+.b-session-time.b-other {
+  color: #8ab4f8;
+}
+
 .s-amount.off {
   color: var(--dim-3);
   text-decoration: line-through;

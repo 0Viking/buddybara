@@ -151,6 +151,17 @@ export const Bridge = {
   /** Opens the n8n instance whose address is in the Credential Manager. */
   openN8n: () => call<void>("open_n8n"),
 
+  // ── Other models in the chat (src-tauri/src/chat.rs) ──────────────────────
+  /** The models a provider offers (it needs its key, or a server its address). */
+  chatModels: (provider: string) => callOrThrow<ModelInfo[]>("chat_models", { provider }),
+  /** One answer to the conversation; a model server streams it as `chat-delta` events for `run`. */
+  chatSend: (provider: string, model: string, turns: { role: string; content: string }[], run: number) =>
+    callOrThrow<string>("chat_send", { provider, model, turns, run }),
+  /** Settings → AI models → Connect: the address as kept, and the server's models. */
+  localConnect: (id: string, url: string) => callOrThrow<LocalConnected>("local_connect", { id, url }),
+  /** The OpenAI-compatible server's key, bound to the address it is typed for. */
+  localSetKey: (url: string, key: string) => callOrThrow<void>("local_set_key", { url, key }),
+
   // ── Connectors: Claude Code's MCP servers (src-tauri/src/mcp.rs) ──────────
   /** The catalog alone, at once (every state "missing"). */
   mcpCatalog: async () => (await call<McpEntry[]>("mcp_catalog")) ?? [],
@@ -265,6 +276,25 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+}
+
+/** A model a chat provider offers (chat.rs ModelInfo). */
+export interface ModelInfo {
+  id: string;
+  label: string;
+}
+
+/** What Connect found at a model server's address (local_chat.rs Connected). */
+export interface LocalConnected {
+  url: string;
+  models: string[];
+  loopback: boolean;
+}
+
+/** The text so far of a streamed answer (chat.rs Delta). */
+export interface ChatDelta {
+  run: number;
+  text: string;
 }
 
 /** One `integration` event (integrations.rs IntegrationUpdate). */

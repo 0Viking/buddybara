@@ -27,6 +27,14 @@ export interface Chat {
   /** How its run ended: with an error, or stopped by the user. */
   failed: boolean;
   stopped: boolean;
+  /** A conversation with another model than Claude Code (chat.rs): no session, not saved. */
+  other?: OtherModel;
+}
+
+/** Another model a conversation goes to: a provider of Settings → AI models and its model. */
+export interface OtherModel {
+  provider: string;
+  model: string;
 }
 
 export function makeChat(project: CodeProject, id: string | null, title: string): Chat {

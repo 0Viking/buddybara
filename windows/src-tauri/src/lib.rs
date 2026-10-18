@@ -1,6 +1,7 @@
 // Buddybara for Windows — app wiring and the commands the island calls.
 
 mod agents;
+mod chat;
 mod claude;
 mod code;
 mod config_file;
@@ -11,9 +12,11 @@ mod hooks;
 mod i18n;
 mod integrations;
 mod island;
+mod local_chat;
 mod log;
 mod mcp;
 mod net;
+mod openai_compat;
 mod pipe;
 mod platform;
 mod secrets;
@@ -407,6 +410,10 @@ fn secret_present(key: String) -> bool {
 
 #[tauri::command]
 fn secret_set(app: AppHandle, key: String, value: String) -> Result<(), String> {
+    // Bound to its server's address: only local_set_key may store it (removing it is fine).
+    if key == local_chat::CUSTOM_KEY && !value.is_empty() {
+        return Err("use local_set_key".into());
+    }
     let before = (key == "github-token").then(|| secrets::get(&key));
     secrets::set(&key, &value)?;
     // A new token answers for someone else: GitHub's card starts over.
@@ -585,6 +592,10 @@ pub fn run() {
             open_n8n,
             refresh_integration,
             github_refresh,
+            chat::chat_models,
+            chat::chat_send,
+            chat::local_connect,
+            chat::local_set_key,
             open_settings_window,
             desktop::desktop_buddybara_info,
             desktop::desktop_buddybara_drag_begin,

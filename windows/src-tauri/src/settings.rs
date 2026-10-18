@@ -42,6 +42,13 @@ pub struct Settings {
     /// ("fr", "pt-BR", "zh-Hans"…). Kept as it comes: a code this build doesn't
     /// know reads as "".
     pub language: String,
+    /// The model picked for each other chat provider in Settings → AI models,
+    /// by provider id ("openai", "ollama"…).
+    pub chat_models: BTreeMap<String, String>,
+    /// The model servers' addresses, empty until connected (local_chat.rs).
+    pub ollama_url: String,
+    pub lmstudio_url: String,
+    pub custom_url: String,
     /// Buddybara on the desktop: whether he lives there, and his spot. Owned by
     /// the Rust side (desktop.rs) — what a webview sends back is ignored.
     pub desktop_buddybara: DesktopBuddybaraPref,
@@ -80,6 +87,10 @@ impl Default for Settings {
             plan_relay_installed: false,
             pill_colors: BTreeMap::new(),
             language: String::new(),
+            chat_models: BTreeMap::new(),
+            ollama_url: String::new(),
+            lmstudio_url: String::new(),
+            custom_url: String::new(),
             desktop_buddybara: DesktopBuddybaraPref::default(),
         }
     }

@@ -15,7 +15,7 @@
 
 import {
   Bridge, onDragDrop, onEvent,
-  type CodeProject, type CodeRunEvent, type CodeSession, type DragDropPayload, type DroppedFile,
+  type ChatDelta, type CodeProject, type CodeRunEvent, type CodeSession, type DragDropPayload, type DroppedFile,
 } from "../core/bridge";
 import { BUDDY_H, BUDDY_NECK, BUDDY_W, type AlertView } from "../core/layout";
 import { Sound } from "../core/sound";
@@ -27,10 +27,11 @@ import { ICONS } from "../views/icons";
 import { renderMarkdown } from "../views/markdown";
 import {
   PASTE_MAX_MB, ago, applyRunEvent, dropQueue, folderOf, lineOf, makeChat, mergeQueued, pastedName, takeQueue,
-  tooBig, userLine, type Chat, type Line,
+  tooBig, userLine, type Chat, type Line, type OtherModel,
 } from "./run";
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
 import { BuddyTerminal, type TermTarget } from "./terminal";
+import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
   enabledServices, refreshServiceKeys, servicesNews, servicesSeen, servicesVersion, servicesView, startServices,
 } from "./services";
@@ -154,6 +155,11 @@ async function logged(what: string, step: Promise<unknown>) {
   }
 }
 
+/** An other model's provider, by name ("OpenAI-compatible" in the interface language). */
+function otherName(provider: string): string {
+  return t(providerDef(provider)?.name ?? provider);
+}
+
 /**
  * Builds `el` again only when what it shows changed. Every run event redraws
  * the panel, and an element rebuilt between a press and its release takes the
@@ -274,6 +280,16 @@ export class Buddy {
   private termShown = false;
   /** The Services tab is on screen in place of a project. */
   private services = false;
+  /** The provider (Settings → AI models) new conversations go to, or null for Claude Code. */
+  private other: string | null = stored("other");
+  /** Which other providers have their key, for the menu; asked when the panel opens. */
+  private otherKeys: Record<string, boolean> = {};
+  /** Conversations with other models, by run, while one answers; and the line it streams into. */
+  private otherRuns = new Map<number, Chat>();
+  private nextOtherRun = 1_000_000_000;
+  private partial = new WeakMap<Chat, Line>();
+  /** Each project's conversations with other models, kept while Buddybara runs (they aren't saved). */
+  private others = new Map<string, Chat[]>();
   private servicesRow = h("button", { class: "b-project b-services" });
   private terminal = new BuddyTerminal(
     (target) => this.terminalEnded(target),
@@ -440,6 +456,8 @@ export class Buddy {
     await logged("notifications", onEvent<HookNotice>("hook", (p) => this.onHook(p)));
     await logged("terminal", this.terminal.init());
     startServices(() => this.render(), (good) => this.desktop.emote(good ? "happy" : "surprised"));
+    await logged("other models", onEvent<ChatDelta>("chat-delta", (d) => this.onDelta(d)));
+    void this.refreshOtherKeys();
     // The whole window is the panel: it takes the mouse wherever it is shown.
     void Bridge.setIslandRect(BUDDY_NECK, 0, BUDDY_W, BUDDY_H);
     void Bridge.setCollapsed(true);
@@ -496,6 +514,7 @@ export class Buddy {
       this.el.classList.add("open");
       void this.pour(true);
       void this.loadProjects();
+      void this.refreshOtherKeys();
       Sound.play("open");
       // The conversation it opens on is looked at now.
       this.seen(this.chat?.id ?? null);
@@ -799,6 +818,16 @@ export class Buddy {
     const files = this.attachments.map((f) => f.path);
     if ((!text && !files.length) || !project) return;
     const chat = writtenIn ?? makeChat(project, null, t("New conversation"));
+    // A new conversation goes to the other model picked in the menu, if one is.
+    if (!chat.id && !chat.other && !chat.lines.length) {
+      const other = this.otherReady();
+      if (other) chat.other = other;
+    }
+    if (chat.other && files.length) {
+      this.attachError = t("Only Claude Code can read attached files.");
+      this.renderAttachments();
+      return;
+    }
     // Claude Code has it open in the terminal: two of them would write one session.
     if (chat.id && this.terminal.runsFor({ project: chat.project.path, session: chat.id })) {
       this.attachError = t("This conversation is open in the terminal.");
@@ -834,6 +863,7 @@ export class Buddy {
 
   /** One `claude -p` run for the conversation (code.rs send); `sent`: the lines it carries. */
   private async start(chat: Chat, prompt: string, attachments: string[], sent: Line[]) {
+    if (chat.other) return this.startOther(chat);
     chat.failed = false;
     chat.stopped = false;
     chat.run = STARTING;
@@ -874,6 +904,15 @@ export class Buddy {
     const chat = this.chat;
     if (chat?.run == null) return;
     chat.stopped = true;
+    if (chat.other) {
+      // Another model can't be stopped mid-answer: what it streamed stays, the rest is let go.
+      this.otherRuns.delete(chat.run);
+      this.partial.delete(chat);
+      chat.run = null;
+      this.restoreQueue(chat);
+      this.render();
+      return;
+    }
     if (chat.run !== STARTING) void Bridge.codeStop(chat.run);
   }
 
@@ -1193,8 +1232,15 @@ export class Buddy {
     this.back.style.visibility = this.chat ? "visible" : "hidden";
     this.title.textContent = this.services ? t("Services") : this.chat?.title ?? this.project?.name ?? "";
     this.modeBtn.style.display = this.services ? "none" : "";
-    keyed(this.modeBtn, [this.mode, this.model, this.ultracodeOn()], () => {
+    // A conversation with another model says which; so does a new one that would go to it.
+    const other = this.chat?.other ?? (this.chat?.id ? null : this.otherReady());
+    this.modeBtn.disabled = this.chat?.other != null;
+    keyed(this.modeBtn, [this.mode, this.model, this.ultracodeOn(), other], () => {
       clear(this.modeBtn);
+      if (other) {
+        this.modeBtn.append(h("span", { text: `${otherName(other.provider)} · ${other.model}` }), svg(ICONS.chevronUpDown, 9, { stroke: 2 }));
+        return;
+      }
       const mode = MODES.find((m) => m.id === this.mode) ?? MODES[0];
       const model = MODELS.find((m) => m.id === this.model);
       const label = [t(mode.name), model?.name, this.ultracodeOn() ? "Ultracode" : null].filter(Boolean).join(" · ");
@@ -1364,15 +1410,26 @@ export class Buddy {
       }));
     }
     this.menu.append(h("div", { class: "b-menu-head sep", text: t("Model") }));
-    this.menu.append(this.option(t("Default (recommended)"), t("Use the default model"), this.model == null, () => {
+    const claude = this.other == null;
+    this.menu.append(this.option(t("Default (recommended)"), t("Use the default model"), claude && this.model == null, () => {
       this.model = null;
       store("model", null);
+      this.pickOther(null);
     }));
     for (const m of MODELS) {
-      this.menu.append(this.option(m.name, t(m.about), m.id === this.model, () => {
+      this.menu.append(this.option(m.name, t(m.about), claude && m.id === this.model, () => {
         this.model = m.id;
         store("model", m.id);
+        this.pickOther(null);
       }));
+    }
+    // Another model, for new conversations: no tools, so the mode and effort here don't apply to it.
+    const ready = readyProviders(State.settings, this.otherKeys);
+    if (ready.length) {
+      this.menu.append(h("div", { class: "b-menu-head sep", text: t("Other models") }));
+      for (const { def, model } of ready) {
+        this.menu.append(this.option(t(def.name), model, this.other === def.id, () => this.pickOther(def.id)));
+      }
     }
     // Ultracode goes with any effort (CLI 2.1.299 and later), Max included.
     const ultracode = this.ultracodeOn();
@@ -1412,6 +1469,102 @@ export class Buddy {
     this.menu.append(toggle);
   }
 
+  // ── Other models ────────────────────────────────────────────────────────────
+
+  /** Picked in the menu: new conversations go to `provider`, or to Claude Code again (null). */
+  private pickOther(provider: string | null) {
+    this.other = provider;
+    store("other", provider);
+  }
+
+  private async refreshOtherKeys() {
+    for (const p of PROVIDERS) if (p.key) this.otherKeys[p.key] = (await Bridge.secretPresent(p.key)) ?? false;
+  }
+
+  /** The other model a new conversation goes to now, if it is still set up in Settings. */
+  private otherReady(): OtherModel | null {
+    const ready = readyProviders(State.settings, this.otherKeys).find((r) => r.def.id === this.other);
+    return ready ? { provider: ready.def.id, model: ready.model } : null;
+  }
+
+  /** One answer from the conversation's other model, then whatever was typed meanwhile. */
+  private async startOther(chat: Chat) {
+    const other = chat.other!;
+    if (!chat.id && chat.title === t("New conversation")) {
+      const first = chat.lines.find((l) => l.role === "user")?.text.split("\n")[0] ?? "";
+      if (first) chat.title = first.length > 60 ? `${first.slice(0, 57)}…` : first;
+    }
+    chat.failed = false;
+    chat.stopped = false;
+    const run = ++this.nextOtherRun;
+    chat.run = run;
+    this.otherRuns.set(run, chat);
+    const kept = this.others.get(chat.project.path) ?? [];
+    if (!kept.includes(chat)) this.others.set(chat.project.path, [chat, ...kept]);
+    this.render();
+    const turns = chat.lines
+      .filter((l) => l.role === "user" || l.role === "assistant")
+      .map((l) => ({ role: l.role, content: l.text }));
+    let answer: string | null = null;
+    let failure = "";
+    try {
+      answer = await Bridge.chatSend(other.provider, other.model, turns, run);
+    } catch (err) {
+      failure = errorText(err);
+    }
+    // Stopped meanwhile: stop() already let this run go.
+    if (!this.otherRuns.delete(run)) return;
+    const streamed = this.partial.get(chat);
+    this.partial.delete(chat);
+    if (answer != null) {
+      if (streamed) streamed.text = answer;
+      else chat.lines.push({ role: "assistant", text: answer });
+    } else {
+      if (streamed) chat.lines = chat.lines.filter((l) => l !== streamed);
+      chat.lines.push({ role: "error", text: failure });
+      chat.failed = true;
+    }
+    chat.run = null;
+    Sound.play(chat.failed ? "error" : "finish");
+    if (!chat.failed && takeQueue(chat)) {
+      void this.startOther(chat);
+      return;
+    }
+    if (this.chat === chat) this.restoreQueue(chat);
+    this.render();
+  }
+
+  /** A model server's answer as it streams. */
+  private onDelta(d: ChatDelta) {
+    const chat = this.otherRuns.get(d.run);
+    if (!chat || !d.text) return;
+    let line = this.partial.get(chat);
+    if (!line) {
+      line = { role: "assistant", text: "" };
+      chat.lines.push(line);
+      this.partial.set(chat, line);
+    }
+    line.text = d.text;
+    if (this.chat === chat) this.render();
+  }
+
+  /** A conversation with another model, on its project's list. */
+  private otherRow(c: Chat): HTMLElement {
+    const first = c.lines.find((l) => l.role === "user")?.text ?? "";
+    const row = h("button", { class: "b-session" },
+      h("div", { class: "b-session-top" },
+        c.run != null ? h("span", { class: "b-live" }) : null,
+        h("span", { class: "b-session-title", text: c.title }),
+        h("span", { class: "b-session-time b-other", text: `${otherName(c.other!.provider)} · ${c.other!.model}` })),
+      first ? h("div", { class: "b-session-sub", text: first }) : null);
+    row.addEventListener("click", () => {
+      this.leaveTerminal();
+      this.chat = c;
+      this.render();
+    });
+    return row;
+  }
+
   private renderBody() {
     const body = this.body;
     if (this.services) {
@@ -1440,7 +1593,8 @@ export class Buddy {
     const sessions = this.sessions?.map((s) => [
       s.id, s.title, s.prompt, ago(s.last), this.working(this.project?.path ?? "", s.id), this.notices.get(s.id)?.kind ?? null,
     ]);
-    keyed(body, [this.notice, this.project?.path, sessions ?? null, this.renaming], () => this.buildList());
+    const others = this.others.get(this.project?.path ?? "")?.map((c) => [c.title, c.run != null, c.lines.length]);
+    keyed(body, [this.notice, this.project?.path, sessions ?? null, this.renaming, others ?? null], () => this.buildList());
   }
 
   /** The picked project's sessions, or why there are none. */
@@ -1452,10 +1606,11 @@ export class Buddy {
       body.append(h("div", { class: "b-hint", text: t("Pick a project") }));
     } else if (this.sessions == null) {
       body.append(h("div", { class: "b-hint", text: t("Loading…") }));
-    } else if (!this.sessions.length) {
+    } else if (!this.sessions.length && !this.others.get(this.project.path)?.length) {
       body.append(h("div", { class: "b-hint", text: t("No sessions yet") }));
     } else {
       const project = this.project;
+      for (const c of this.others.get(project.path) ?? []) body.append(this.otherRow(c));
       for (const s of this.sessions) {
         if (this.renaming === s.id) {
           body.append(this.renameRow(project, s));
@@ -1653,7 +1808,7 @@ export class Buddy {
 
   private renderComposer() {
     this.composer.style.display = this.project ? "" : "none";
-    this.input.placeholder = this.chat?.id ? t("Continue…") : t("Ask me anything…");
+    this.input.placeholder = this.chat?.id || this.chat?.lines.length ? t("Continue…") : t("Ask me anything…");
     const stop = this.stopShown();
     // Its icon redrawn only when it changes: Stop pressed while Claude streams must land.
     keyed(this.sendBtn, [stop], () => {

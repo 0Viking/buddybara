@@ -86,6 +86,12 @@ export interface Settings {
    * else English), or one of src/i18n's ten codes ("fr", "pt-BR", "zh-Hans"…).
    */
   language: string;
+  /** The model picked for each other chat provider (Settings → AI models), by provider id. */
+  chatModels: Record<string, string>;
+  /** The model servers' addresses, "" until connected (local_chat.rs). */
+  ollamaUrl: string;
+  lmstudioUrl: string;
+  customUrl: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -100,6 +106,10 @@ export const DEFAULT_SETTINGS: Settings = {
   planRelayInstalled: false,
   pillColors: {},
   language: "",
+  chatModels: {},
+  ollamaUrl: "",
+  lmstudioUrl: "",
+  customUrl: "",
 };
 
 type Listener = () => void;
