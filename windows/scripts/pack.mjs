@@ -24,11 +24,6 @@ const PACKAGES = {
       suffix: "-setup.exe",
       names: [`Buddybara-Windows-${version}-setup.exe`, "Buddybara-Windows-setup.exe"],
     },
-    {
-      dir: "msi",
-      suffix: ".msi",
-      names: [`Buddybara-Windows-${version}.msi`, "Buddybara-Windows.msi"],
-    },
   ],
   linux: [
     {

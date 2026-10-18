@@ -1,0 +1,35 @@
+# Pushing a tag v<version> (the one in windows/src-tauri/tauri.conf.json)
+# builds the Windows installer and publishes it as a GitHub release, under the
+# names scripts/pack.mjs gives it. The installer is unsigned: SmartScreen warns
+# on its first runs ("More info" → "Run anyway").
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+      - name: The tag is the app's version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+      - run: npm ci
+      - run: npm run pack
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/*.exe --title "Buddybara ${GITHUB_REF_NAME#v}" --generate-notes
