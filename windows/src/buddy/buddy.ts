@@ -32,6 +32,8 @@ import {
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
 import { BuddyTerminal, type TermTarget } from "./terminal";
 import { Setup } from "./setup";
+import { renderUsage } from "./usage";
+import { refreshClaudePlan } from "../island/hooks";
 import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
   enabledServices, refreshServiceKeys, servicesNews, servicesSeen, servicesVersion, servicesView, startServices,
@@ -303,6 +305,8 @@ export class Buddy {
       void Bridge.openSettingsWindow(page);
     },
   );
+  /** The plan usage above Settings (usage.ts). */
+  private usage = h("div", { class: "b-usage" });
   private body = h("div", { class: "b-body" });
   private card = h("div", { class: "b-card" });
   private files = h("div", { class: "b-attach" });
@@ -319,7 +323,7 @@ export class Buddy {
     const sideHead = h("div", { class: "b-side-head" }, h("span", { text: tl("Projects") }), headActions);
     const settingsBtn = h("button", { class: "b-icon", title: tl("Settings") }, svg(ICONS.gear, 14));
     const sideFoot = h("div", { class: "b-side-foot" }, settingsBtn);
-    const side = h("aside", { class: "b-side" }, this.servicesRow, sideHead, this.newRow, this.list, sideFoot);
+    const side = h("aside", { class: "b-side" }, this.servicesRow, sideHead, this.newRow, this.list, this.usage, sideFoot);
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },
       bar, this.menu, this.confirm, this.body, this.terminal.el, this.card, this.files, this.composer, this.dropZone);
@@ -443,6 +447,8 @@ export class Buddy {
       minimize: () => this.minimize(),
     });
     State.subscribe(() => this.renderCard());
+    renderUsage(this.usage);
+    State.subscribe(() => renderUsage(this.usage));
     // A service switched on or off in Settings: its row and its card follow.
     State.subscribe(() => {
       this.renderServicesRow();
@@ -520,6 +526,8 @@ export class Buddy {
       void this.loadProjects();
       void this.refreshOtherKeys();
       void this.setup.check();
+      renderUsage(this.usage);
+      refreshClaudePlan();
       Sound.play("open");
       // The conversation it opens on is looked at now.
       this.seen(this.chat?.id ?? null);

@@ -3505,6 +3505,61 @@
    "pt-BR": "Começar",
    "ru": "Начать",
    "id": "Mulai"
+  },
+  "This session": {
+   "zh-Hans": "本次会话",
+   "hi": "यह सेशन",
+   "es": "Esta sesión",
+   "ar": "هذه الجلسة",
+   "fr": "Cette session",
+   "bn": "এই সেশন",
+   "pt-BR": "Esta sessão",
+   "ru": "Эта сессия",
+   "id": "Sesi ini"
+  },
+  "This week": {
+   "zh-Hans": "本周",
+   "hi": "इस हफ़्ते",
+   "es": "Esta semana",
+   "ar": "هذا الأسبوع",
+   "fr": "Cette semaine",
+   "bn": "এই সপ্তাহ",
+   "pt-BR": "Esta semana",
+   "ru": "Эта неделя",
+   "id": "Minggu ini"
+  },
+  "{pct}% used": {
+   "zh-Hans": "已用 {pct}%",
+   "hi": "{pct}% इस्तेमाल",
+   "es": "{pct}% usado",
+   "ar": "مستخدم {pct}%",
+   "fr": "{pct} % utilisé",
+   "bn": "{pct}% ব্যবহৃত",
+   "pt-BR": "{pct}% usado",
+   "ru": "Использовано {pct}%",
+   "id": "{pct}% terpakai"
+  },
+  "Resets at {time}": {
+   "zh-Hans": "{time} 重置",
+   "hi": "{time} पर रीसेट",
+   "es": "Se reinicia a las {time}",
+   "ar": "يُعاد الضبط عند {time}",
+   "fr": "Réinitialisé à {time}",
+   "bn": "{time}-এ রিসেট হবে",
+   "pt-BR": "Redefine às {time}",
+   "ru": "Сброс в {time}",
+   "id": "Direset pukul {time}"
+  },
+  "Resets {day} at {time}": {
+   "zh-Hans": "{day} {time} 重置",
+   "hi": "{day} {time} पर रीसेट",
+   "es": "Se reinicia el {day} a las {time}",
+   "ar": "يُعاد الضبط {day} عند {time}",
+   "fr": "Réinitialisé {day} à {time}",
+   "bn": "{day} {time}-এ রিসেট হবে",
+   "pt-BR": "Redefine {day} às {time}",
+   "ru": "Сброс: {day}, {time}",
+   "id": "Direset {day} pukul {time}"
   }
  }
 }

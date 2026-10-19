@@ -1372,3 +1372,53 @@
   gap: 8px;
   margin-top: 6px;
 }
+
+/* ── Plan usage above Settings (usage.ts): the session and the week, as on claude.ai ── */
+
+.b-usage {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px 8px;
+  border-top: 1px solid rgba(255, 236, 214, 0.06);
+}
+
+.b-use-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.b-use-head span:last-child {
+  font-weight: 600;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.b-use-bar {
+  height: 5px;
+  margin: 5px 0 3px;
+  border-radius: 3px;
+  background: rgba(255, 236, 214, 0.08);
+  overflow: hidden;
+}
+
+.b-use-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--amber);
+}
+
+.b-use-bar.high i {
+  background: var(--red);
+}
+
+.b-use-when {
+  font-size: 10.5px;
+  color: var(--dim);
+}
