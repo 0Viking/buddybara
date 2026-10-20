@@ -205,6 +205,8 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
     if !payload.is_object() {
         return;
     }
+    // The session's project, not the folder it last cd'd into (code.rs).
+    crate::code::anchor_cwd(&mut payload);
 
     let event = payload
         .get("hook_event_name")

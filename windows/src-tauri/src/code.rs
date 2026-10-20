@@ -161,6 +161,28 @@ static SEEN: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default)
 
 /// Called by the relay server with every hook event: the folder the session
 /// works in becomes one Buddybara may continue it in.
+/// A hook's `cwd` is where the session is now, and a `cd` moves it. Its
+/// project is where it started: the folder its transcript is stored under
+/// (`~/.claude/projects/<folder_name>`). When `cwd` is below that folder, the
+/// folder becomes the cwd, so the panel finds the session where Claude Code
+/// keeps it.
+pub fn anchor_cwd(payload: &mut Value) {
+    let Some(store) = payload
+        .get("transcript_path")
+        .and_then(Value::as_str)
+        .and_then(|t| Some(Path::new(t).parent()?.file_name()?.to_string_lossy().into_owned()))
+    else {
+        return;
+    };
+    let Some(cwd) = payload.get("cwd").and_then(Value::as_str).map(str::to_owned) else { return };
+    if folder_name(&cwd) == store {
+        return;
+    }
+    if let Some(root) = Path::new(&cwd).ancestors().skip(1).find(|a| folder_name(&a.to_string_lossy()) == store) {
+        payload["cwd"] = json!(root.to_string_lossy());
+    }
+}
+
 pub fn remember(payload: &Value) {
     let Some(cwd) = payload.get("cwd").and_then(Value::as_str).filter(|c| !c.is_empty()) else { return };
     if let Ok(path) = std::fs::canonicalize(cwd) {
@@ -859,6 +881,24 @@ mod tests {
     fn a_project_folder_is_named_as_claude_code_names_it() {
         assert_eq!(folder_name(r"C:\Users\me\projects\Claude assistant"), "C--Users-me-projects-Claude-assistant");
         assert_eq!(folder_name("/home/me/x.y"), "-home-me-x-y");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_hook_cwd_moved_by_cd_goes_back_to_where_the_session_started() {
+        let transcript = r"C:\Users\me\.claude\projects\C--Users-me-projects-my-app\644458cf-87fd-4800-881d-c7ccf962fd84.jsonl";
+        let mut moved = json!({ "cwd": r"C:\Users\me\projects\my app\windows\src", "transcript_path": transcript });
+        anchor_cwd(&mut moved);
+        assert_eq!(moved["cwd"], r"C:\Users\me\projects\my app");
+        // Started there, or no transcript to go by: left as it is.
+        for cwd in [r"C:\Users\me\projects\my app", r"D:\elsewhere"] {
+            let mut same = json!({ "cwd": cwd, "transcript_path": transcript });
+            anchor_cwd(&mut same);
+            assert_eq!(same["cwd"], cwd);
+        }
+        let mut bare = json!({ "cwd": r"C:\x\y" });
+        anchor_cwd(&mut bare);
+        assert_eq!(bare["cwd"], r"C:\x\y");
     }
 
     #[test]
