@@ -27,6 +27,8 @@ export interface Chat {
    *  the next message goes into it, and a turn it starts by itself shows up. */
   alive?: number | null;
   queue: Queued[];
+  /** Side questions (/btw) about a conversation: shown in the drawer, never saved. */
+  side?: boolean;
   /** How its run ended: with an error, or stopped by the user. */
   failed: boolean;
   stopped: boolean;

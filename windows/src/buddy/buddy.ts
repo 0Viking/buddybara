@@ -280,7 +280,6 @@ export class Buddy {
   /** "Delete this conversation?" is asked. */
   private confirming = false;
   /** The terminal is on screen in place of the conversation. */
-  private termShown = false;
   /** The Services tab is on screen in place of a project. */
   private services = false;
   /** The provider (Settings → AI models) new conversations go to, or null for Claude Code. */
@@ -308,6 +307,16 @@ export class Buddy {
   );
   /** The plan usage above Settings (usage.ts). */
   private usage = h("div", { class: "b-usage" });
+  /** The drawer under the conversation: the terminal and side questions (drawer.ts). */
+  private drawer: Drawer;
+  private btw: Chat | null = null;
+  /** btw sessions: copies never saved, so their hooks bring no dot and open nothing. */
+  private ephemeral = new Set<string>();
+  private btwLog = h("div", { class: "b-log b-drawer-log" });
+  private btwInput = h("textarea", { class: "b-input", rows: "1", spellcheck: "false" }) as HTMLTextAreaElement;
+  private btwPane = h("div", { class: "b-drawer-pane" }, this.btwLog,
+    h("div", { class: "b-composer" }, this.btwInput,
+      h("button", { class: "b-send", onclick: () => void this.sendBtw() }, svg(ICONS.arrowUp, 11, { stroke: 2.4 }))));
   private body = h("div", { class: "b-body" });
   private card = h("div", { class: "b-card" });
   private files = h("div", { class: "b-attach" });
@@ -327,11 +336,31 @@ export class Buddy {
     const side = h("aside", { class: "b-side" }, this.servicesRow, sideHead, this.newRow, this.list, this.usage, sideFoot);
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },
-      bar, this.menu, this.confirm, this.body, this.terminal.el, this.card, this.files, this.composer, this.dropZone);
-    // ponytail: the side-chat drawer is a mockup (drawer.ts), nothing connected yet.
-    const drawer = new Drawer(main);
-    this.composer.after(drawer.bar, drawer.space);
-    main.append(drawer.el);
+      bar, this.menu, this.confirm, this.body, this.card, this.files, this.composer, this.dropZone);
+    // The drawer: the terminal and side questions (btw), under the conversation.
+    this.drawer = new Drawer(main, {
+      terminal: this.terminal.el,
+      picked: (tab) => {
+        if (tab === "terminal") void this.showTerminal();
+        else {
+          this.render();
+          this.btwInput.focus();
+        }
+      },
+      closed: () => {
+        this.render();
+        if (this.shown) this.input.focus();
+      },
+      btwView: () => this.btwView(),
+    });
+    this.composer.after(this.drawer.bar, this.drawer.space);
+    main.append(this.drawer.el);
+    this.btwInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void this.sendBtw();
+      }
+    });
     this.el = h("div", { id: "buddy" }, side, main, this.setup.el);
     this.genie = h("div", { id: "genie" }, this.el);
     root.append(this.genie);
@@ -352,7 +381,7 @@ export class Buddy {
     });
     this.termBtn.addEventListener("click", () => {
       if (this.termShown) this.hideTerminal();
-      else void this.showTerminal();
+      else this.drawer.show("terminal");
     });
     this.buildConfirm();
     // A click anywhere else is "no" to the question.
@@ -738,7 +767,7 @@ export class Buddy {
   /** Claude finished (or failed): that session opens here, ready for a reply. */
   private openFinished() {
     const task = State.focusTask;
-    if (!task?.sessionId || !task.sessionCwd) return;
+    if (!task?.sessionId || !task.sessionCwd || this.ephemeral.has(task.sessionId)) return;
     // Already on screen: a run of ours draws itself; another session's is read again.
     if (this.chat?.id === task.sessionId) {
       if (this.chat.run == null) void this.openSession(this.chat.project, task.sessionId, this.chat.title);
@@ -817,6 +846,15 @@ export class Buddy {
     // goes; Enter again sends without it.
     if (this.failures !== failures) return;
     const text = this.input.value.trim();
+    // /btw: a side question in the drawer; the conversation itself is untouched.
+    const btw = /^\/btw(?:\s+|$)/i.exec(text);
+    if (btw) {
+      if (await this.askBtw(text.slice(btw[0].length))) {
+        this.input.value = "";
+        this.fitInput();
+      }
+      return;
+    }
     const files = this.attachments.map((f) => f.path);
     if ((!text && !files.length) || !project) return;
     const chat = writtenIn ?? makeChat(project, null, t("New conversation"));
@@ -920,6 +958,84 @@ export class Buddy {
     this.render();
   }
 
+  /** The terminal is on screen: its tab in front, the drawer up. */
+  private get termShown(): boolean {
+    return this.drawer.open && this.drawer.active === "terminal";
+  }
+
+  // ── Side questions (/btw) ───────────────────────────────────────────────────
+
+  /** The side questions of the conversation on screen (or of the project, before it has one). */
+  private btwChat(): Chat | null {
+    const project = this.chat?.project ?? this.project;
+    if (!project) return null;
+    // Its title says what it is about: another conversation gets its own.
+    const about = this.chat?.id ?? project.path;
+    if (this.btw?.title !== about) this.btw = { ...makeChat(project, null, about), side: true };
+    return this.btw;
+  }
+
+  /**
+   * /btw: answered from a copy of the conversation that is never saved
+   * (code.rs Options.btw), in Plan mode so it only reads. False when it can't
+   * go yet (no project, or the last one is still being answered): the text stays.
+   */
+  private async askBtw(question: string): Promise<boolean> {
+    const btw = this.btwChat();
+    if (!btw) return false;
+    this.drawer.show("btw");
+    question = question.trim();
+    if (!question) return true;
+    if (btw.run != null) return false;
+    btw.lines.push(userLine(question, []));
+    btw.run = STARTING;
+    this.drawer.render();
+    try {
+      const run = await Bridge.codeSend(btw.project.path, this.chat?.id ?? null, question,
+        { mode: "plan", effort: this.effort, model: this.model, ultracode: false, btw: true });
+      btw.run = run;
+      this.runs.set(run, btw);
+      const missed = this.early.get(run) ?? [];
+      this.early.delete(run);
+      for (const e of missed) this.onRun(e);
+    } catch (err) {
+      btw.run = null;
+      btw.lines.push({ role: "error", text: errorText(err) });
+    }
+    this.drawer.render();
+    return true;
+  }
+
+  private async sendBtw() {
+    if (await this.askBtw(this.btwInput.value)) this.btwInput.value = "";
+  }
+
+  /** A side question's run: its answer shows in the btw tab, and nothing else follows from it. */
+  private onBtw(chat: Chat, e: CodeRunEvent) {
+    if (e.kind === "exit") {
+      this.runs.delete(e.run);
+      chat.run = null;
+    } else {
+      if (e.kind === "init" && e.session) this.ephemeral.add(e.session);
+      applyRunEvent(chat, e);
+      if (e.kind === "result") Sound.play(e.error ? "error" : "finish");
+    }
+    this.drawer.render();
+  }
+
+  private btwView(): HTMLElement {
+    const btw = this.btwChat();
+    clear(this.btwLog);
+    if (!btw?.lines.length) {
+      this.btwLog.append(h("div", { class: "b-hint", text: t("Ask Claude something on the side: it answers from a copy of this conversation, which stays as it is.") }));
+    }
+    for (const line of btw?.lines ?? []) this.btwLog.append(lineView(line));
+    if (btw?.run != null) this.btwLog.append(h("div", { class: "chat-row" }, h("div", { class: "typing" }, h("i"), h("i"), h("i"))));
+    this.btwInput.placeholder = t("Ask on the side…");
+    requestAnimationFrame(() => (this.btwLog.scrollTop = this.btwLog.scrollHeight));
+    return this.btwPane;
+  }
+
   /** The send button stops Claude only while it works and nothing new is on its way. */
   private stopShown(): boolean {
     return this.chat?.run != null && !this.drafting();
@@ -956,6 +1072,7 @@ export class Buddy {
       if (this.early.size > 8) this.early.delete(this.early.keys().next().value!);
       return;
     }
+    if (chat.side) return this.onBtw(chat, e);
     if (e.kind === "exit") {
       this.runs.delete(e.run);
       if (chat.alive === e.run) chat.alive = null;
@@ -1028,7 +1145,7 @@ export class Buddy {
   private onHook(p: HookNotice) {
     const kind = NOTICE_KINDS[p.hook_event_name ?? ""];
     // Other agents' sessions are not in these lists: their dot could never go.
-    if (!kind || !p.session_id || !p.cwd || (p.buddybara_agent && p.buddybara_agent !== "claude-desktop")) return;
+    if (!kind || !p.session_id || !p.cwd || this.ephemeral.has(p.session_id) || (p.buddybara_agent && p.buddybara_agent !== "claude-desktop")) return;
     this.notify(p.session_id, p.cwd, kind);
   }
 
@@ -1219,7 +1336,8 @@ export class Buddy {
     this.renderBar();
     this.renderMenu();
     this.confirm.classList.toggle("open", this.confirming && this.chat?.id != null);
-    this.el.querySelector(".b-main")?.classList.toggle("terming", this.termShown);
+    this.drawer.bar.style.display = this.project || this.chat ? "" : "none";
+    this.drawer.render();
     this.renderBody();
     this.renderCard();
     this.renderAttachments();
@@ -1365,8 +1483,10 @@ export class Buddy {
 
   private async showTerminal() {
     const target = this.termTarget();
-    if (!target || this.chat?.run != null) return;
-    this.termShown = true;
+    if (!target || this.chat?.run != null) {
+      this.drawer.close("terminal");
+      return;
+    }
     this.menuOpen = false;
     this.confirming = false;
     void Bridge.focusWindow(true);
@@ -1378,14 +1498,14 @@ export class Buddy {
 
   private hideTerminal() {
     if (!this.termShown) return;
-    this.termShown = false;
+    this.drawer.hide();
     this.render();
     if (this.shown) this.input.focus();
   }
 
   /** Elsewhere in the panel: the terminal view goes (Claude Code keeps running in it). */
   private leaveTerminal() {
-    this.termShown = false;
+    if (this.termShown) this.drawer.hide();
     this.confirming = false;
   }
 

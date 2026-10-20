@@ -3560,6 +3560,61 @@
    "pt-BR": "Redefine {day} às {time}",
    "ru": "Сброс: {day}, {time}",
    "id": "Direset {day} pukul {time}"
+  },
+  "Drag to resize": {
+   "zh-Hans": "拖动以调整大小",
+   "hi": "आकार बदलने के लिए खींचें",
+   "es": "Arrastra para cambiar el tamaño",
+   "ar": "اسحب لتغيير الحجم",
+   "fr": "Fais glisser pour redimensionner",
+   "bn": "আকার বদলাতে টানুন",
+   "pt-BR": "Arraste para redimensionar",
+   "ru": "Потяните, чтобы изменить размер",
+   "id": "Seret untuk mengubah ukuran"
+  },
+  "Open a tab": {
+   "zh-Hans": "打开标签页",
+   "hi": "टैब खोलें",
+   "es": "Abrir una pestaña",
+   "ar": "فتح علامة تبويب",
+   "fr": "Ouvrir un onglet",
+   "bn": "ট্যাব খুলুন",
+   "pt-BR": "Abrir uma aba",
+   "ru": "Открыть вкладку",
+   "id": "Buka tab"
+  },
+  "Slide down": {
+   "zh-Hans": "收起",
+   "hi": "नीचे करें",
+   "es": "Bajar",
+   "ar": "إنزال",
+   "fr": "Replier",
+   "bn": "নামিয়ে দিন",
+   "pt-BR": "Recolher",
+   "ru": "Свернуть вниз",
+   "id": "Turunkan"
+  },
+  "Ask on the side…": {
+   "zh-Hans": "顺便问一句…",
+   "hi": "साथ में पूछें…",
+   "es": "Pregunta aparte…",
+   "ar": "اسأل جانبيًا…",
+   "fr": "Pose une question à côté…",
+   "bn": "পাশাপাশি জিজ্ঞেস করুন…",
+   "pt-BR": "Pergunte à parte…",
+   "ru": "Спросите между делом…",
+   "id": "Tanya sambil lalu…"
+  },
+  "Ask Claude something on the side: it answers from a copy of this conversation, which stays as it is.": {
+   "zh-Hans": "顺便问 Claude 一个问题：它根据这段对话的副本回答，对话本身保持不变。",
+   "hi": "Claude से साथ में कुछ पूछें: वह इस बातचीत की एक कॉपी से जवाब देता है, बातचीत वैसी ही रहती है।",
+   "es": "Pregúntale algo aparte a Claude: responde desde una copia de esta conversación, que queda igual.",
+   "ar": "اسأل Claude شيئًا جانبيًا: يجيب من نسخة من هذه المحادثة، وتبقى المحادثة كما هي.",
+   "fr": "Pose une question à Claude à côté : il répond depuis une copie de cette conversation, qui reste telle quelle.",
+   "bn": "Claude-কে পাশাপাশি কিছু জিজ্ঞেস করুন: সে এই কথোপকথনের একটি কপি থেকে উত্তর দেয়, কথোপকথনটি যেমন আছে তেমনই থাকে।",
+   "pt-BR": "Pergunte algo à parte ao Claude: ele responde a partir de uma cópia desta conversa, que fica como está.",
+   "ru": "Спросите Claude о чём-то между делом: он отвечает по копии этого разговора, а сам разговор не меняется.",
+   "id": "Tanyakan sesuatu ke Claude sambil lalu: ia menjawab dari salinan percakapan ini, yang tetap seperti semula."
   }
  }
 }

@@ -630,6 +630,10 @@ pub struct Options {
     pub model: Option<String>,
     #[serde(default)]
     pub ultracode: bool,
+    /// A side question (/btw): answered from a copy of the conversation that
+    /// is never saved, so the conversation itself doesn't change.
+    #[serde(default)]
+    pub btw: bool,
 }
 
 /// The arguments of a run, before the prompt goes in on stdin. `files`: the
@@ -668,6 +672,12 @@ fn arguments(session: Option<&str>, options: &Options, files: Option<&Path>) -> 
             return Err("Not a session id.".into());
         }
         args.extend(["--resume".into(), id.into()]);
+        if options.btw {
+            args.push("--fork-session".into());
+        }
+    }
+    if options.btw {
+        args.push("--no-session-persistence".into());
     }
     // Last: --add-dir takes every value up to the next option.
     if let Some(dir) = files {
@@ -925,11 +935,14 @@ mod tests {
 
     #[test]
     fn a_run_only_ever_asks_for_a_mode_of_the_picker() {
-        let args = arguments(Some("644458cf-87fd-4800-881d-c7ccf962fd84"), &Options { mode: Some("plan".into()), effort: Some("max".into()), model: Some("claude-fable-5-1".into()), ultracode: false }, None).unwrap();
+        let args = arguments(Some("644458cf-87fd-4800-881d-c7ccf962fd84"), &Options { mode: Some("plan".into()), effort: Some("max".into()), model: Some("claude-fable-5-1".into()), ultracode: false, btw: false }, None).unwrap();
         assert_eq!(
             args.join(" "),
             "-p --input-format stream-json --output-format stream-json --verbose --permission-mode plan --effort max --model claude-fable-5-1 --resume 644458cf-87fd-4800-881d-c7ccf962fd84"
         );
+        // A side question forks the session and saves nothing.
+        let btw = Options { mode: Some("plan".into()), btw: true, ..Default::default() };
+        assert!(arguments(Some("644458cf-87fd-4800-881d-c7ccf962fd84"), &btw, None).unwrap().join(" ").ends_with("--resume 644458cf-87fd-4800-881d-c7ccf962fd84 --fork-session --no-session-persistence"));
         // Ultracode goes with the effort, whatever it is.
         let ultra = Options { effort: Some("max".into()), ultracode: true, ..Default::default() };
         assert_eq!(

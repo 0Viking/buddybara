@@ -1,44 +1,27 @@
-// ponytail: MOCKUP of the side-chat drawer, to try the feel before it is built:
-// tabs (btw, Terminal, other models), the slide-up over the bottom half of the
-// chat, resizing by its grip, and the bar under the text box that brings it
-// back. Nothing is connected: the tabs hold sample lines and answer with a
-// canned reply. Its words are English until it is real; then they go through
-// t() in all 9 languages.
+// The side drawer: tabs that slide up over the bottom half of the conversation
+// (the chat and its text box move into the top half), resized by their grip,
+// and a bar under the text box that brings them back. Terminal is Claude
+// Code's own screen (terminal.ts); btw holds side questions (buddy.ts askBtw),
+// each answered from a copy of the conversation that is never saved.
 
 import { clear, h } from "../views/dom";
+import { t } from "../i18n/i18n";
 
-type Kind = "btw" | "terminal" | "openai" | "gemini";
-type Said = [role: "user" | "assistant", text: string];
+export type DrawerTab = "btw" | "terminal";
 
-const KINDS: Record<Kind, { name: string; color: string }> = {
-  btw: { name: "btw", color: "var(--mikan)" },
-  terminal: { name: "Terminal", color: "var(--dim)" },
-  openai: { name: "OpenAI · gpt-4o", color: "#10a37f" },
-  gemini: { name: "Gemini 2.5 Flash", color: "#4f8df5" },
-};
-
-const SAMPLE: Record<Kind, Said[]> = {
-  btw: [
-    ["user", "btw, what does anchor_cwd do again?"],
-    ["assistant", "It moves a hook's cwd back up to the folder the session started in. This is a side question: the main conversation never sees it."],
-  ],
-  terminal: [
-    ["assistant", "PS C:\\Users\\yurik\\projects\\Claude assistant> npm run pack"],
-    ["assistant", "Finished 1 bundle at: windows\\release\\Buddybara-Windows-0.4.0-setup.exe (4.15 MB)"],
-  ],
-  openai: [
-    ["user", "Is there a shorter way to write this regex?"],
-    ["assistant", "Yes: /^\\s*$/ does the same as your two checks."],
-  ],
-  gemini: [["user", "Summarise the conversation above in 3 bullets."]],
-};
-
-const CANNED = "Mockup: this tab isn't connected yet.";
-
-interface Tab {
-  kind: Kind;
-  lines: Said[];
+export interface DrawerHost {
+  /** The terminal's own element, kept in its tab. */
+  terminal: HTMLElement;
+  /** A tab came to the front (the terminal starts, or takes the keyboard). */
+  picked(tab: DrawerTab): void;
+  /** A tab was closed. */
+  closed(tab: DrawerTab): void;
+  /** What the btw tab shows: the current conversation's side questions. */
+  btwView(): HTMLElement;
 }
+
+const NAMES: Record<DrawerTab, string> = { btw: "btw", terminal: "Terminal" };
+const COLORS: Record<DrawerTab, string> = { btw: "var(--mikan)", terminal: "var(--dim)" };
 
 export class Drawer {
   readonly el = h("div", { class: "b-drawer" });
@@ -46,39 +29,58 @@ export class Drawer {
   readonly bar = h("button", { class: "b-tabsbar" });
   /** Below the bar: grows to the drawer's height, pushing the chat into the top half. */
   readonly space = h("div", { class: "b-drawer-space" });
-  private tabs: Tab[] = (["btw", "terminal", "openai"] as Kind[]).map((kind) => ({ kind, lines: [...SAMPLE[kind]] }));
-  private active = 0;
+  private tabs: DrawerTab[] = [];
+  /** The tab in front (shown while the drawer is up). */
+  active: DrawerTab | null = null;
   private adding = false;
+  private head = h("div", { class: "b-drawer-tabs" });
+  private btwBox = h("div", { class: "b-drawer-btw" });
 
-  constructor(private main: HTMLElement) {
-    this.bar.addEventListener("click", () => this.setOpen(true));
+  constructor(private main: HTMLElement, private host: DrawerHost) {
+    this.bar.addEventListener("click", () => this.show(this.active ?? this.tabs[0] ?? "btw"));
+    const body = h("div", { class: "b-drawer-body" }, host.terminal, this.btwBox);
+    this.el.append(this.grip(), this.head, body);
     this.render();
   }
 
-  private setOpen(open: boolean) {
-    if (open && !this.tabs.length) this.add("btw");
-    this.main.classList.toggle("drawer-open", open);
+  get open(): boolean {
+    return this.main.classList.contains("drawer-open");
+  }
+
+  /** `tab` in front, added if it wasn't open, and the drawer up. */
+  show(tab: DrawerTab) {
+    if (!this.tabs.includes(tab)) this.tabs.push(tab);
+    this.active = tab;
+    this.main.classList.add("drawer-open");
+    this.adding = false;
+    this.render();
+    this.host.picked(tab);
+  }
+
+  /** The drawer slides down; its tabs stay, listed on the bar. */
+  hide() {
+    this.main.classList.remove("drawer-open");
     this.adding = false;
     this.render();
   }
 
-  private add(kind: Kind) {
-    this.tabs.push({ kind, lines: [...SAMPLE[kind]] });
-    this.active = this.tabs.length - 1;
-    this.adding = false;
+  close(tab: DrawerTab) {
+    if (!this.tabs.includes(tab)) return;
+    this.tabs = this.tabs.filter((x) => x !== tab);
+    if (this.active === tab) this.active = this.tabs[this.tabs.length - 1] ?? null;
+    if (!this.tabs.length) this.main.classList.remove("drawer-open");
     this.render();
+    this.host.closed(tab);
+    if (this.active && this.open) this.host.picked(this.active);
   }
 
-  private close(i: number) {
-    this.tabs.splice(i, 1);
-    this.active = Math.min(this.active, this.tabs.length - 1);
-    if (!this.tabs.length) this.setOpen(false);
-    else this.render();
+  has(tab: DrawerTab): boolean {
+    return this.tabs.includes(tab);
   }
 
   /** The grip: dragged, the drawer takes 25–80 % of the column. */
   private grip(): HTMLElement {
-    const grip = h("div", { class: "b-drawer-grip", title: "Drag to resize" }, h("i"));
+    const grip = h("div", { class: "b-drawer-grip", title: t("Drag to resize") }, h("i"));
     grip.addEventListener("pointerdown", (e) => {
       grip.setPointerCapture(e.pointerId);
       this.main.classList.add("drawer-dragging");
@@ -98,68 +100,54 @@ export class Drawer {
     return grip;
   }
 
-  private render() {
-    // The bar: what is open, or what the drawer is for.
+  /** Redrawn with the panel: the btw tab follows the conversation. */
+  render() {
+    const dot = (tab: DrawerTab) => h("i", { style: `background:${COLORS[tab]}` });
     clear(this.bar);
     this.bar.append(
       h("span", { class: "b-tabsbar-up", text: "▴" }),
       ...(this.tabs.length
-        ? this.tabs.map((t) => h("span", { class: "b-tabsbar-tab" }, h("i", { style: `background:${KINDS[t.kind].color}` }), KINDS[t.kind].name))
-        : [h("span", { text: "Side chats: btw, terminal, other models" })]),
+        ? this.tabs.map((tab) => h("span", { class: "b-tabsbar-tab" }, dot(tab), NAMES[tab]))
+        : [h("span", { text: "btw · Terminal" })]),
     );
 
-    clear(this.el);
-    const tabRow = h("div", { class: "b-drawer-tabs" },
-      ...this.tabs.map((t, i) => {
-        const x = h("span", { class: "b-drawer-x", text: "×", title: "Close" });
-        x.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.close(i);
-        });
-        const tab = h("button", { class: i === this.active ? "b-drawer-tab on" : "b-drawer-tab" },
-          h("i", { style: `background:${KINDS[t.kind].color}` }), KINDS[t.kind].name, x);
-        tab.addEventListener("click", () => {
-          this.active = i;
-          this.render();
-        });
-        return tab;
-      }),
-      h("button", { class: "b-drawer-add", text: "+", title: "Open a side chat", onclick: () => { this.adding = !this.adding; this.render(); } }),
-      h("span", { class: "b-drawer-gap" }),
-      h("button", { class: "b-drawer-down", text: "▾", title: "Slide down", onclick: () => this.setOpen(false) }),
-    );
-    const menu = this.adding
-      ? h("div", { class: "b-drawer-menu" },
-        ...(Object.keys(KINDS) as Kind[]).map((k) =>
-          h("button", { onclick: () => this.add(k) }, h("i", { style: `background:${KINDS[k].color}` }), KINDS[k].name)))
-      : null;
-    this.el.append(this.grip(), tabRow, menu ?? "", this.tabs[this.active] ? this.body(this.tabs[this.active]) : "");
-  }
-
-  private body(tab: Tab): HTMLElement {
-    const term = tab.kind === "terminal";
-    const log = h("div", { class: term ? "b-drawer-log term" : "b-drawer-log" },
-      ...tab.lines.map(([role, text]) => h("div", { class: `b-drawer-line ${role}`, text })));
-    const input = h("textarea", { class: "b-input", rows: "1", placeholder: term ? "> type a command" : `Ask ${KINDS[tab.kind].name}…` }) as HTMLTextAreaElement;
-    const send = () => {
-      const text = input.value.trim();
-      if (!text) return;
-      tab.lines.push(["user", term ? `> ${text}` : text]);
-      this.render();
-      window.setTimeout(() => {
-        tab.lines.push(["assistant", CANNED]);
+    clear(this.head);
+    for (const tab of this.tabs) {
+      const x = h("span", { class: "b-drawer-x", text: "×", title: t("Close") });
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.close(tab);
+      });
+      this.head.append(h("button", {
+        class: tab === this.active ? "b-drawer-tab on" : "b-drawer-tab",
+        onclick: () => this.show(tab),
+      }, dot(tab), NAMES[tab], x));
+    }
+    const missing = (Object.keys(NAMES) as DrawerTab[]).filter((tab) => !this.tabs.includes(tab));
+    if (missing.length) {
+      this.head.append(h("button", { class: "b-drawer-add", text: "+", title: t("Open a tab"), onclick: () => {
+        this.adding = !this.adding;
         this.render();
-      }, 450);
-    };
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        send();
+      } }));
+    }
+    this.head.append(
+      h("span", { class: "b-drawer-gap" }),
+      h("button", { class: "b-drawer-down", text: "▾", title: t("Slide down"), onclick: () => this.hide() }),
+    );
+    if (this.adding) {
+      this.head.append(h("div", { class: "b-drawer-menu" },
+        ...missing.map((tab) => h("button", { onclick: () => this.show(tab) }, dot(tab), NAMES[tab]))));
+    }
+
+    this.host.terminal.hidden = this.active !== "terminal";
+    this.btwBox.hidden = this.active !== "btw";
+    if (this.active === "btw") {
+      // The same element each time: put back, its text box would lose the keyboard.
+      const view = this.host.btwView();
+      if (this.btwBox.firstChild !== view) {
+        clear(this.btwBox);
+        this.btwBox.append(view);
       }
-    });
-    window.setTimeout(() => (log.scrollTop = log.scrollHeight));
-    return h("div", { class: "b-drawer-body" },
-      log,
-      h("div", { class: "b-composer" }, input, h("button", { class: "b-send", text: "↑", onclick: send })));
+    }
   }
 }

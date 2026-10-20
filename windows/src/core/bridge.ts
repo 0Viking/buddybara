@@ -61,6 +61,8 @@ export interface CodeRunOptions {
   model: string | null;
   /** Workflows on every task, together with `effort` (whatever its level). */
   ultracode: boolean;
+  /** A side question (/btw): a copy of the conversation, never saved (code.rs Options.btw). */
+  btw?: boolean;
 }
 
 /** What Buddybara needs before it can work (setup.rs Status). */
