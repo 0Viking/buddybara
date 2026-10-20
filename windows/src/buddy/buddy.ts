@@ -33,6 +33,7 @@ import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./gen
 import { BuddyTerminal, type TermTarget } from "./terminal";
 import { Setup } from "./setup";
 import { renderUsage } from "./usage";
+import { Drawer } from "./drawer";
 import { refreshClaudePlan } from "../island/hooks";
 import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
