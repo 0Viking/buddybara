@@ -284,7 +284,7 @@ fn place_panel(app: &AppHandle, collapsed: bool, following: bool) {
     let (wx, wy) = (wa.position.x as f64, wa.position.y as f64);
     let (ww, wh) = (wa.size.width as f64, wa.size.height as f64);
     // No desktop Buddybara yet: as if he sat in the bottom-right corner.
-    let side = 120.0 * scale;
+    let side = crate::desktop::side(app) * scale;
     let (bx, by, bw, _) = at.unwrap_or((wx + ww - side - 24.0 * scale, wy + wh - side - 24.0 * scale, side, side));
 
     if collapsed {

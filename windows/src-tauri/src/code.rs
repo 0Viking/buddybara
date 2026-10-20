@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{LazyLock, Mutex};
 use std::time::UNIX_EPOCH;
@@ -147,11 +147,29 @@ fn session_files(project: &Path) -> Vec<(String, PathBuf, u64)> {
                 continue;
             }
             let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| is_session_id(s)) else { continue };
+            if is_stub(&path) {
+                continue;
+            }
             files.push((id.to_string(), path.clone(), modified(&path)));
         }
     }
     files.sort_by(|a, b| b.2.cmp(&a.2));
     files
+}
+
+/// Small enough to be read whole to tell a stub from a conversation.
+const STUB_MAX: u64 = 16 * 1024;
+
+/// A file with no turn in it: what VS Code writes for a session it only
+/// remembers (its title, mode and cost) once the transcript itself moved to
+/// another project. Nothing to read or continue there, so it isn't listed.
+fn is_stub(path: &Path) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| m.len() <= STUB_MAX)
+        && std::fs::read_to_string(path).is_ok_and(|text| is_stub_text(&text))
+}
+
+fn is_stub_text(text: &str) -> bool {
+    !text.contains(r#""type":"user""#) && !text.contains(r#""lastPrompt""#)
 }
 
 // ── Which folders may be used ─────────────────────────────────────────────────
@@ -166,21 +184,43 @@ static SEEN: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default)
 /// (`~/.claude/projects/<folder_name>`). When `cwd` is below that folder, the
 /// folder becomes the cwd, so the panel finds the session where Claude Code
 /// keeps it.
+/// Also: a transcript moved into another project's store folder (the store
+/// reorganized by hand) and continued from where it first started (VS Code
+/// opened on the home folder) belongs to the project it was moved to — where
+/// that folder's sessions start. Its turns are written there, not in `cwd`.
 pub fn anchor_cwd(payload: &mut Value) {
-    let Some(store) = payload
+    let Some(stored) = payload
         .get("transcript_path")
         .and_then(Value::as_str)
-        .and_then(|t| Some(Path::new(t).parent()?.file_name()?.to_string_lossy().into_owned()))
+        .and_then(|t| Some(Path::new(t).parent()?.to_path_buf()))
     else {
         return;
     };
+    let Some(store) = stored.file_name().map(|n| n.to_string_lossy().into_owned()) else { return };
     let Some(cwd) = payload.get("cwd").and_then(Value::as_str).map(str::to_owned) else { return };
-    if folder_name(&cwd) == store {
+    // VS Code writes `c:`, a terminal `C:`: the same store folder.
+    if folder_name(&cwd).eq_ignore_ascii_case(&store) {
         return;
     }
-    if let Some(root) = Path::new(&cwd).ancestors().skip(1).find(|a| folder_name(&a.to_string_lossy()) == store) {
+    if let Some(root) = Path::new(&cwd).ancestors().skip(1).find(|a| folder_name(&a.to_string_lossy()).eq_ignore_ascii_case(&store)) {
         payload["cwd"] = json!(root.to_string_lossy());
+        return;
     }
+    if let Some(home) = moved_to(&stored) {
+        payload["cwd"] = json!(home);
+    }
+}
+
+/// Where the sessions of a store folder start, when that folder still exists.
+/// Asked again by every hook event of a moved session: read once per folder.
+fn moved_to(stored: &Path) -> Option<String> {
+    static KNOWN: LazyLock<Mutex<HashMap<PathBuf, Option<String>>>> = LazyLock::new(Default::default);
+    if let Some(known) = KNOWN.lock().unwrap().get(stored) {
+        return known.clone();
+    }
+    let found = started_in(stored).filter(|p| Path::new(p).is_dir());
+    KNOWN.lock().unwrap().insert(stored.to_path_buf(), found.clone());
+    found
 }
 
 pub fn remember(payload: &Value) {
@@ -204,8 +244,37 @@ fn check(root: &Path, seen: &HashSet<PathBuf>, project: &str) -> Result<PathBuf,
     }
 }
 
+/// Folders of Claude Code's session store outside the projects folder (VS
+/// Code's projects, a terminal's), as `session_folders` last found them: their
+/// sessions may be continued where they started.
+static FOUND: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+/// Settings `allSessionFolders`: the list also shows those folders.
+static SESSION_FOLDERS: AtomicBool = AtomicBool::new(true);
+
+pub fn set_session_folders(on: bool) {
+    SESSION_FOLDERS.store(on, Ordering::Relaxed);
+    if !on {
+        FOUND.lock().unwrap().clear();
+    }
+}
+
+/// Folders outside the projects folder Buddybara may use: seen in a hook, or
+/// found in the session store.
+fn known() -> HashSet<PathBuf> {
+    let mut known = SEEN.lock().unwrap().clone();
+    known.extend(FOUND.lock().unwrap().iter().cloned());
+    known
+}
+
 pub(crate) fn allowed(project: &str) -> Result<PathBuf, String> {
-    check(&root(), &SEEN.lock().unwrap(), project)
+    let root = root();
+    let first = check(&root, &known(), project);
+    if first.is_ok() || !SESSION_FOLDERS.load(Ordering::Relaxed) {
+        return first;
+    }
+    // Asked before the list was read since launch: the store is read now.
+    session_folders(&root);
+    check(&root, &known(), project)
 }
 
 // ── Projects and sessions ─────────────────────────────────────────────────────
@@ -217,12 +286,17 @@ pub struct Project {
     pub sessions: usize,
     /// Unix seconds of the newest session, 0 without one.
     pub last: u64,
+    /// Not in the projects folder: a folder Claude Code has sessions for.
+    pub elsewhere: bool,
 }
 
-/// The folders under ~/projects, most recent work first, then by name.
+/// The folders under ~/projects, most recent work first, then by name; then,
+/// unless Settings says no, every other folder Claude Code has sessions for.
 pub fn projects() -> Vec<Project> {
-    let Ok(entries) = std::fs::read_dir(root()) else { return Vec::new() };
-    let mut list: Vec<Project> = entries
+    let root = root();
+    let mut list: Vec<Project> = std::fs::read_dir(&root)
+        .into_iter()
+        .flatten()
         .flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
         .filter_map(|e| {
@@ -237,11 +311,105 @@ pub fn projects() -> Vec<Project> {
                 path: path.to_string_lossy().into_owned(),
                 sessions: files.len(),
                 last: files.first().map_or(0, |f| f.2),
+                elsewhere: false,
             })
         })
         .collect();
     list.sort_by(|a, b| b.last.cmp(&a.last).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    if SESSION_FOLDERS.load(Ordering::Relaxed) {
+        list.extend(session_folders(&root));
+    }
     list
+}
+
+/// The folders Claude Code has sessions for outside the projects folder,
+/// newest work first. They become folders Buddybara may use (FOUND).
+fn session_folders(root: &Path) -> Vec<Project> {
+    let found = found_in(&store(), root);
+    {
+        let mut known = FOUND.lock().unwrap();
+        known.clear();
+        known.extend(found.iter().map(|(real, _)| real.clone()));
+    }
+    let mut list: Vec<Project> = found
+        .into_iter()
+        .map(|(_, given)| {
+            let files = session_files(Path::new(&given));
+            Project {
+                // A drive's root has no name of its own: its path is one.
+                name: Path::new(&given).file_name().map_or_else(|| given.clone(), |n| n.to_string_lossy().into_owned()),
+                sessions: files.len(),
+                last: files.first().map_or(0, |f| f.2),
+                path: given,
+                elsewhere: true,
+            }
+        })
+        .collect();
+    list.sort_by(|a, b| b.last.cmp(&a.last).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    list
+}
+
+/// Each folder of `store` whose sessions were started in a folder that still
+/// exists, outside `root`'s list and outside the store itself: (real path, the
+/// path as the transcripts spell it, which the store folder is named after).
+fn found_in(store: &Path, root: &Path) -> Vec<(PathBuf, String)> {
+    let root = std::fs::canonicalize(root).ok();
+    let store_real = std::fs::canonicalize(store).ok();
+    let mut taken = HashSet::new();
+    let mut out = Vec::new();
+    let Ok(folders) = std::fs::read_dir(store) else { return out };
+    for folder in folders.flatten().filter(|f| f.file_type().is_ok_and(|t| t.is_dir())) {
+        let Some(cwd) = started_in(&folder.path()) else { continue };
+        let Ok(real) = std::fs::canonicalize(&cwd) else { continue };
+        if !real.is_dir()
+            // In the projects folder: listed already.
+            || root.as_ref().is_some_and(|r| real.parent() == Some(r.as_path()))
+            // Claude Code's own store: a session run from in there, not a project.
+            || store_real.as_ref().is_some_and(|s| real.starts_with(s))
+        {
+            continue;
+        }
+        // VS Code writes `c:`, a terminal `C:`: one folder, two store folders.
+        if taken.insert(real.clone()) {
+            out.push((real, cwd));
+        }
+    }
+    out
+}
+
+/// Where the sessions of a store folder were started: the `cwd` their newest
+/// transcripts record, or the folder above it they are stored under (a `cd`
+/// before the first line). None for a folder of stubs that record none.
+fn started_in(folder: &Path) -> Option<String> {
+    let name = folder.file_name()?.to_string_lossy().into_owned();
+    let mut files: Vec<(PathBuf, u64)> = std::fs::read_dir(folder)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "jsonl"))
+        .map(|p| {
+            let at = modified(&p);
+            (p, at)
+        })
+        .collect();
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+    for (file, _) in files.iter().take(3) {
+        let (head, _) = ends(file);
+        let Some(cwd) = head
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .find_map(|v| v.get("cwd").and_then(Value::as_str).filter(|c| !c.is_empty()).map(str::to_owned))
+        else {
+            continue;
+        };
+        if folder_name(&cwd).eq_ignore_ascii_case(&name) {
+            return Some(cwd);
+        }
+        if let Some(up) = Path::new(&cwd).ancestors().skip(1).find(|a| folder_name(&a.to_string_lossy()).eq_ignore_ascii_case(&name)) {
+            return Some(up.to_string_lossy().into_owned());
+        }
+    }
+    None
 }
 
 /// Characters Windows refuses in a file name.
@@ -286,7 +454,7 @@ pub fn new_project(name: &str) -> Result<Project, String> {
         std::io::ErrorKind::AlreadyExists => crate::i18n::tf("{name} already exists.", &[("name", &name)]),
         _ => cannot(Path::new(&name), e),
     })?;
-    Ok(Project { name, path: dir.to_string_lossy().into_owned(), sessions: 0, last: 0 })
+    Ok(Project { name, path: dir.to_string_lossy().into_owned(), sessions: 0, last: 0, elsewhere: false })
 }
 
 #[derive(Serialize)]
@@ -926,6 +1094,36 @@ mod tests {
     }
 
     #[test]
+    fn a_file_with_no_turn_in_it_is_not_a_session() {
+        let stub = [
+            r#"{"type":"ai-title","aiTitle":"Enemy shotgun visual glitch","sessionId":"ad606ca9-d5b8-4524-b42c-1c76095acaa6"}"#,
+            r#"{"type":"mode","mode":"normal"}"#,
+            r#"{"type":"cost-state","cost":0}"#,
+        ]
+        .join("\n");
+        assert!(is_stub_text(&stub));
+        assert!(!is_stub_text(&format!("{stub}\n{}", r#"{"type":"user","message":{"role":"user","content":"hi"}}"#)));
+        assert!(!is_stub_text(r#"{"type":"last-prompt","lastPrompt":"hi"}"#));
+    }
+
+    #[test]
+    fn a_transcript_moved_to_another_project_belongs_to_it() {
+        let base = std::env::temp_dir().join(format!("buddybara-moved-{}", std::process::id()));
+        let work = base.join("work stuff");
+        let store = base.join("store").join(folder_name(&work.to_string_lossy()));
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::create_dir_all(&store).unwrap();
+        let line = json!({ "type": "user", "cwd": work.to_string_lossy() }).to_string();
+        std::fs::write(store.join("644458cf-87fd-4800-881d-c7ccf962fd84.jsonl"), format!("{line}\n")).unwrap();
+        // Continued from the home folder, its turns written in the work folder's store.
+        let transcript = store.join("ad606ca9-d5b8-4524-b42c-1c76095acaa6.jsonl");
+        let mut event = json!({ "cwd": base.join("home").to_string_lossy(), "transcript_path": transcript.to_string_lossy() });
+        anchor_cwd(&mut event);
+        assert_eq!(event["cwd"], json!(work.to_string_lossy()));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn only_a_uuid_is_a_session_id() {
         assert!(is_session_id("644458cf-87fd-4800-881d-c7ccf962fd84"));
         for bad in ["", "644458cf", "644458cf-87fd-4800-881d-c7ccf962fd8", "644458cf-87fd-4800-881d-c7ccf962fd8z", "../../../../windows/x-y-z-w"] {
@@ -1006,6 +1204,43 @@ mod tests {
         assert!(check(&root, &none, &base.join("missing").to_string_lossy()).is_err());
         let seen = HashSet::from([std::fs::canonicalize(&elsewhere).unwrap()]);
         assert!(check(&root, &seen, &elsewhere.to_string_lossy()).is_ok());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn sessions_started_outside_the_projects_folder_are_found_where_they_started() {
+        let base = std::env::temp_dir().join(format!("buddybara-found-{}", std::process::id()));
+        let store = base.join("store");
+        let root = base.join("projects");
+        let mine = root.join("mine");
+        let theirs = base.join("work").join("their app");
+        let moved = base.join("moved");
+        for dir in [&mine, &theirs, &moved] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let session = |cwd: &Path, under: &Path| {
+            let dir = store.join(folder_name(&under.to_string_lossy()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let line = json!({ "type": "user", "cwd": cwd.to_string_lossy() }).to_string();
+            std::fs::write(dir.join("644458cf-87fd-4800-881d-c7ccf962fd84.jsonl"), format!("{line}\n")).unwrap();
+        };
+        session(&theirs, &theirs);
+        // A `cd` before its first line: found where it is stored, not where it went.
+        session(&moved.join("src"), &moved);
+        // Listed already, gone, or in the store itself: not found.
+        session(&mine, &mine);
+        session(&base.join("gone"), &base.join("gone"));
+        session(&store.join("inside"), &store.join("inside"));
+        std::fs::create_dir_all(store.join("inside")).unwrap();
+        // A folder of stubs that record no folder.
+        std::fs::create_dir_all(store.join("C--stubs")).unwrap();
+        std::fs::write(store.join("C--stubs").join("a.jsonl"), r#"{"type":"custom-title","customTitle":"x"}"#).unwrap();
+
+        let mut found: Vec<PathBuf> = found_in(&store, &root).into_iter().map(|(real, _)| real).collect();
+        found.sort();
+        let mut want = vec![std::fs::canonicalize(&theirs).unwrap(), std::fs::canonicalize(&moved).unwrap()];
+        want.sort();
+        assert_eq!(found, want);
         let _ = std::fs::remove_dir_all(&base);
     }
 

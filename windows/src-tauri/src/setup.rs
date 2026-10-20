@@ -26,6 +26,8 @@ pub struct Status {
     pub hooks: bool,
     /// The folder the projects are listed from.
     pub root: String,
+    /// Other folders listed because Claude Code has sessions for them.
+    pub elsewhere: usize,
 }
 
 #[tauri::command]
@@ -43,6 +45,7 @@ pub async fn setup_status() -> Result<Status, String> {
             signed_in,
             hooks: crate::hooks::status().installed,
             root: crate::code::current_root().display().to_string(),
+            elsewhere: crate::code::projects().iter().filter(|p| p.elsewhere).count(),
         }
     })
     .await

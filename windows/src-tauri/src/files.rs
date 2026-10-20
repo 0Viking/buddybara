@@ -19,6 +19,32 @@ pub struct DroppedFile {
     pub size: u64,
 }
 
+/// What a link in an answer points at, opened: a folder in File Explorer, a
+/// file in VS Code at `line` (or selected in File Explorer). Never run: an
+/// answer that links a .bat or an .exe only shows it. A relative path is from
+/// the conversation's project folder, `base`.
+pub fn open_local(path: &str, line: Option<u32>, base: Option<&str>) -> Result<(), String> {
+    let given = PathBuf::from(path.trim());
+    let full = if given.is_absolute() {
+        given
+    } else {
+        let base = base.map(Path::new).filter(|b| b.is_dir()).ok_or_else(|| "no folder to find it in".to_string())?;
+        base.join(given)
+    };
+    let Ok(real) = std::fs::canonicalize(&full) else {
+        crate::log::line("link: a file that isn't there");
+        return Err(format!("{} was not found", full.display()));
+    };
+    if real.is_dir() {
+        crate::platform::open_folder(&real);
+        crate::log::line("link: a folder, in the file manager");
+    } else {
+        let how = crate::platform::show_file(&real, line);
+        crate::log::line(format!("link: a file, with {how:?}"));
+    }
+    Ok(())
+}
+
 pub fn inbox_dir() -> PathBuf {
     settings::local_dir().join("inbox")
 }

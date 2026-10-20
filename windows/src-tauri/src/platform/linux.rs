@@ -219,6 +219,36 @@ pub fn open_url(url: &str) {
     let _ = Command::new("xdg-open").arg(url).spawn();
 }
 
+/// A folder in the file manager.
+pub fn open_folder(dir: &Path) {
+    if dir.is_dir() {
+        let _ = Command::new("xdg-open").arg(dir).spawn();
+    }
+}
+
+/// A file a link in an answer points at: in VS Code at its line when `code` is
+/// installed, else its folder in the file manager. Shown, never run.
+pub fn show_file(file: &Path, line: Option<u32>) -> &'static str {
+    if let Ok(code) = which("code") {
+        let target = match line {
+            Some(n) => format!("{}:{n}", file.display()),
+            None => file.display().to_string(),
+        };
+        let _ = Command::new(code).arg("-g").arg(target).spawn();
+        "editor"
+    } else {
+        if let Some(dir) = file.parent() {
+            open_folder(dir);
+        }
+        "file manager"
+    }
+}
+
+fn which(name: &str) -> Result<PathBuf, ()> {
+    let dirs = std::env::var_os("PATH").ok_or(())?;
+    std::env::split_paths(&dirs).map(|d| d.join(name)).find(|p| p.is_file()).ok_or(())
+}
+
 /// The "choose folder" dialog, through zenity or kdialog when either is on
 /// PATH. `None` when the user cancels, or when neither is installed. `owner` is
 /// unused here (the dialog is its own top-level window).

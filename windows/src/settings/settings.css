@@ -13,20 +13,35 @@
     "Microsoft YaHei", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Arabic",
     "Noto Sans CJK SC", "Noto Sans SC", "Droid Sans Fallback", sans-serif;
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  /* The theme, as in the panel (src/style.css, core/theme.ts). */
   --bg: #15110e;
-  --side: #0f0c0a;
+  --side: #1b1713;
   --card: #1e1915;
-  --raised: #29221c;
-  --line: rgba(255, 236, 214, 0.08);
-  --line-2: rgba(255, 236, 214, 0.15);
   --ink: #f7efe6;
   --dim: #b4a799;
-  --dim-2: #7f7368;
   --mikan: #ff8a3d;
   --mikan-ink: #2b1405;
+  --code: #e3d8cc;
+  --code-bg: #100c0a;
+  --link: #ffb27a;
+  --tint: #ffecd6;
+  --side-ink: #f7efe6;
+  --selected: #362215;
+  --selected-ink: #ff8a3d;
+  --round: 1;
+  --lines: 1;
   --leaf: #5fd38a;
   --red: #ff6b6b;
   --amber: #ffc048;
+}
+
+/* Mixed from the theme; the sidebar mixes its own from its colours (.side). */
+:root,
+.side {
+  --raised: color-mix(in srgb, var(--card) 95%, var(--ink));
+  --line: color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
+  --line-2: color-mix(in srgb, var(--tint) calc(15% * var(--lines)), transparent);
+  --dim-2: color-mix(in srgb, var(--dim) 66%, var(--bg));
 }
 
 * {
@@ -43,7 +58,7 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font: 500 13.5px/1.45 var(--font);
+  font: 500 calc(13.5px * var(--text, 1))/1.45 var(--font);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -57,6 +72,13 @@ body {
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 
 .side {
+  /* Its own text, as the panel's sidebar (buddy.css .b-side). */
+  --ink: var(--side-ink);
+  --dim: color-mix(in srgb, var(--side-ink) 66%, var(--side));
+  --bg: var(--side);
+  --tint: var(--side-ink);
+  /* What inherits its colour (the brand name) inherits the sidebar text. */
+  color: var(--ink);
   background: var(--side);
   border-inline-end: 1px solid var(--line);
   display: flex;
@@ -82,13 +104,13 @@ body {
 .brand b {
   display: block;
   font-weight: 800;
-  font-size: 18px;
+  font-size: calc(18px * var(--text, 1));
   letter-spacing: -0.01em;
 }
 
 .brand small {
   color: var(--dim-2);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
   font-weight: 600;
 }
 
@@ -99,21 +121,21 @@ button.nav {
   width: 100%;
   padding: 9px 12px;
   border: 0;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--round));
   background: none;
   color: var(--dim);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--text, 1));
   text-align: start;
 }
 
 button.nav:hover:not(.on) {
-  background: rgba(255, 236, 214, 0.05);
+  background: color-mix(in srgb, var(--tint) calc(5% * var(--lines)), transparent);
   color: var(--ink);
 }
 
 button.nav.on {
-  background: rgba(255, 138, 61, 0.14);
-  color: var(--mikan);
+  background: var(--selected);
+  color: var(--selected-ink);
 }
 
 button.nav:active {
@@ -124,7 +146,7 @@ button.nav:active {
   margin-top: auto;
   padding: 14px 8px 0;
   color: var(--dim-2);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
   line-height: 1.4;
 }
 
@@ -157,7 +179,7 @@ button.nav:active {
 
 .head h1 {
   font-weight: 800;
-  font-size: 26px;
+  font-size: calc(26px * var(--text, 1));
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -171,7 +193,7 @@ button.nav:active {
 .card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--round));
 }
 
 .card > h2 {
@@ -180,7 +202,7 @@ button.nav:active {
   gap: 9px;
   padding: 16px 18px 2px;
   font-weight: 800;
-  font-size: 15px;
+  font-size: calc(15px * var(--text, 1));
 }
 
 /* A setting: what it is on the left, its control on the right. */
@@ -209,7 +231,7 @@ button.nav:active {
   display: block;
   margin-top: 2px;
   color: var(--dim);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text, 1));
 }
 
 .srow-ctl {
@@ -232,7 +254,7 @@ button.nav:active {
 
 .hint {
   color: var(--dim);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text, 1));
 }
 
 .row {
@@ -245,7 +267,7 @@ button.nav:active {
 .row > label {
   min-width: 110px;
   color: var(--dim);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text, 1));
   font-weight: 700;
 }
 
@@ -260,7 +282,7 @@ button.nav:active {
 /* ── Controls ────────────────────────────────────────────────────────────── */
 
 button {
-  font: 700 12.5px var(--font);
+  font: 700 calc(12.5px * var(--text, 1)) var(--font);
   padding: 7px 15px;
   border: 1px solid var(--line-2);
   border-radius: 999px;
@@ -272,8 +294,8 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #332a22;
-  border-color: rgba(255, 236, 214, 0.24);
+  background: color-mix(in srgb, var(--card) 90%, var(--ink));
+  border-color: color-mix(in srgb, var(--tint) calc(24% * var(--lines)), transparent);
 }
 
 button:active:not(:disabled) {
@@ -287,7 +309,7 @@ button.primary {
 }
 
 button.primary:hover:not(:disabled) {
-  background: #ff9d5c;
+  background: color-mix(in srgb, var(--mikan) 85%, white);
   border-color: transparent;
 }
 
@@ -316,7 +338,7 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgba(255, 138, 61, 0.7);
+  outline: 2px solid color-mix(in srgb, var(--mikan) 70%, transparent);
   outline-offset: 2px;
 }
 
@@ -327,12 +349,12 @@ select:focus-visible {
   flex: 0 0 40px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
-  background: #3a3129;
+  border-radius: calc(12px * var(--round));
+  background: color-mix(in srgb, var(--card) 86%, var(--ink));
 }
 
 .switch:hover:not(:disabled) {
-  background: #463b31;
+  background: color-mix(in srgb, var(--card) 80%, var(--ink));
   border-color: transparent;
 }
 
@@ -363,8 +385,8 @@ input[type="range"] {
   appearance: none;
   width: 150px;
   height: 5px;
-  border-radius: 3px;
-  background: #3a3129;
+  border-radius: calc(3px * var(--round));
+  background: color-mix(in srgb, var(--card) 86%, var(--ink));
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -373,17 +395,17 @@ input[type="range"]::-webkit-slider-thumb {
   height: 15px;
   border-radius: 50%;
   background: var(--mikan);
-  box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.22);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mikan) 22%, transparent);
 }
 
 input[type="number"],
 input[type="text"],
 input[type="password"],
 select {
-  font: 600 13px var(--font);
+  font: 600 calc(13px * var(--text, 1)) var(--font);
   background: var(--raised);
   border: 1px solid var(--line-2);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--round));
   color: var(--ink);
   padding: 7px 10px;
 }
@@ -395,29 +417,29 @@ input::placeholder {
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(255, 138, 61, 0.6);
+  border-color: color-mix(in srgb, var(--mikan) 60%, transparent);
 }
 
 /* The popup is drawn by the OS: give it an explicit pair of colours rather than
    inheriting white on white. */
 select option {
-  background-color: #241e19;
+  background-color: color-mix(in srgb, var(--card) 97%, var(--ink));
   color: var(--ink);
 }
 
 code,
 .path {
-  font: 400 11.5px var(--mono);
+  font: 400 calc(11.5px * var(--text, 1)) var(--mono);
   color: var(--dim);
   word-break: break-all;
   user-select: text;
 }
 
 .diff {
-  font: 400 11.5px/1.5 var(--mono);
-  background: #0d0a08;
+  font: 400 calc(11.5px * var(--text, 1))/1.5 var(--mono);
+  background: var(--code-bg);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--round));
   padding: 10px 12px;
   max-height: 280px;
   overflow: auto;
@@ -438,8 +460,8 @@ code,
 }
 
 .notice {
-  font-size: 12.5px;
-  border-radius: 12px;
+  font-size: calc(12.5px * var(--text, 1));
+  border-radius: calc(12px * var(--round));
   padding: 9px 13px;
 }
 
@@ -466,7 +488,7 @@ code,
 
 .agent .srow-text .path {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--text, 1));
   white-space: pre-line;
 }
 
@@ -526,7 +548,7 @@ html[dir="rtl"] .stack.svc-keys {
 
 .group h3 {
   font-weight: 800;
-  font-size: 13px;
+  font-size: calc(13px * var(--text, 1));
   color: var(--dim);
   padding: 0 2px;
 }
@@ -545,7 +567,7 @@ html[dir="rtl"] .stack.svc-keys {
   padding: 11px 12px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--round));
   transition: border-color 0.25s;
 }
 
@@ -564,12 +586,12 @@ html[dir="rtl"] .stack.svc-keys {
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--round));
 }
 
 .mark b {
   font-weight: 800;
-  font-size: 19px;
+  font-size: calc(19px * var(--text, 1));
   line-height: 1;
 }
 
@@ -624,12 +646,12 @@ html[dir="rtl"] .stack.svc-keys {
 
 .conn-name {
   font-weight: 800;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--text, 1));
 }
 
 .conn-sub {
   color: var(--dim);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
   font-weight: 600;
 }
 
@@ -640,7 +662,7 @@ html[dir="rtl"] .stack.svc-keys {
 .conn button {
   flex: none;
   padding: 5px 11px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
 }
 
 /* ── Search fields (parts.ts searchBox) ───────────────────────────────────── */
@@ -653,14 +675,14 @@ html[dir="rtl"] .stack.svc-keys {
   padding: 0 14px;
   background: var(--raised);
   border: 1px solid var(--line-2);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--round));
   color: var(--dim-2);
   cursor: text;
   transition: border-color 0.15s;
 }
 
 .search:focus-within {
-  border-color: rgba(255, 138, 61, 0.6);
+  border-color: color-mix(in srgb, var(--mikan) 60%, transparent);
   color: var(--mikan);
 }
 
@@ -671,7 +693,7 @@ html[dir="rtl"] .stack.svc-keys {
   border: 0;
   background: transparent;
   color: var(--ink);
-  font: 600 13.5px var(--font);
+  font: 600 calc(13.5px * var(--text, 1)) var(--font);
   outline: none;
 }
 
@@ -706,7 +728,7 @@ html[dir="rtl"] .stack.svc-keys {
 
 .group-head button {
   padding: 5px 12px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
 }
 
 .dir-card {
@@ -717,7 +739,7 @@ html[dir="rtl"] .stack.svc-keys {
   padding: 12px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--round));
 }
 
 .dir-card.ok {
@@ -751,14 +773,14 @@ html[dir="rtl"] .stack.svc-keys {
   flex: none;
   padding: 0 6px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: calc(10px * var(--text, 1));
   font-weight: 800;
-  background: rgba(255, 236, 214, 0.08);
+  background: color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
   color: var(--dim);
 }
 
 .dir-tier.anthropic {
-  background: rgba(255, 138, 61, 0.16);
+  background: color-mix(in srgb, var(--mikan) 16%, transparent);
   color: var(--mikan);
 }
 
@@ -774,13 +796,13 @@ html[dir="rtl"] .stack.svc-keys {
   overflow: hidden;
   min-height: 2.9em;
   color: var(--dim);
-  font-size: 12px;
+  font-size: calc(12px * var(--text, 1));
   line-height: 1.45;
 }
 
 .dir-error {
   color: #ff9b9b;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -804,16 +826,16 @@ html[dir="rtl"] .stack.svc-keys {
 .dir-parts span {
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(255, 236, 214, 0.06);
+  background: color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
   color: var(--dim);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--text, 1));
   font-weight: 700;
 }
 
 .dir-foot button {
   flex: none;
   padding: 5px 11px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text, 1));
 }
 
 /* Arabic: the window reads right to left (main.ts sets <html dir="rtl">);
@@ -834,4 +856,351 @@ html[dir="rtl"] .switch.on::after {
 html[dir="rtl"] .switch::after {
   left: auto;
   right: 3px;
+}
+
+/* ── Customization (customize.ts) ───────────────────────────────────────── */
+
+.card > h2 .grow {
+  flex: 1 1 auto;
+}
+
+.card-hint {
+  padding: 4px 18px 0;
+  color: var(--dim);
+  font-size: calc(12.5px * var(--text, 1));
+}
+
+/* The schemes: a small drawing of the panel in each, its name under it. */
+.schemes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 18px 18px;
+}
+
+button.scheme {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  padding: 7px;
+  border-radius: calc(14px * var(--round));
+  background: transparent;
+  border: 2px solid transparent;
+  white-space: normal;
+}
+
+button.scheme:hover:not(:disabled) {
+  background: var(--raised);
+  border-color: transparent;
+}
+
+button.scheme.on {
+  border-color: var(--mikan);
+}
+
+.scheme-art {
+  position: relative;
+  display: block;
+  height: 64px;
+  border: 1px solid;
+  border-radius: calc(9px * var(--round));
+  overflow: hidden;
+}
+
+.scheme-art i {
+  position: absolute;
+  display: block;
+}
+
+.art-side {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 26%;
+}
+
+.art-line {
+  left: 33%;
+  top: 14px;
+  width: 52%;
+  height: 5px;
+  border-radius: calc(3px * var(--round));
+}
+
+.art-line.short {
+  top: 25px;
+  width: 34%;
+  opacity: 0.8;
+}
+
+.art-box {
+  left: 33%;
+  right: 8%;
+  bottom: 9px;
+  height: 13px;
+  border-radius: calc(6px * var(--round));
+}
+
+.art-dot {
+  right: calc(8% + 3px);
+  bottom: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.scheme-name {
+  font-weight: 700;
+  font-size: calc(12.5px * var(--text, 1));
+  text-align: center;
+}
+
+/* The colours: two columns of name, hex, reset and picker. */
+.colors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 22px;
+  padding: 12px 18px 16px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.color-row > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.color-row code {
+  font: 500 calc(11.5px * var(--text, 1)) var(--mono);
+  color: var(--dim);
+}
+
+.color-row button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+}
+
+.color-row input[type="color"] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: calc(8px * var(--round));
+  background: none;
+  cursor: pointer;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(5px * var(--round));
+}
+
+/* His picture: what he looks like now, and the buttons to change it. */
+.skin-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px 18px;
+}
+
+.skin-preview {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border: 1px dashed var(--line-2);
+  border-radius: calc(14px * var(--round));
+  color: var(--dim);
+  font-size: calc(12px * var(--text, 1));
+  text-align: center;
+}
+
+.skin-preview img {
+  max-width: 84px;
+  max-height: 84px;
+  object-fit: contain;
+}
+
+.skin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--dim);
+  font-size: calc(12.5px * var(--text, 1));
+}
+
+.skin-text .err {
+  color: var(--red);
+}
+
+/* A size (the text's, his): a slider with a stop per size, each named under
+   its stop — a click on a name goes there. */
+.size-slider {
+  padding: 12px 18px 14px;
+}
+
+.size-slider input[type="range"] {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+/* Inset by half the thumb: where its centre stops at either end. */
+.size-names {
+  position: relative;
+  height: calc(18px * var(--text, 1));
+  margin: 8px 7.5px 0;
+}
+
+.size-names button,
+.size-names button:hover:not(:disabled),
+.size-names button:active:not(:disabled) {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font: 600 calc(11px * var(--text, 1)) var(--font);
+}
+
+.size-names button:dir(rtl),
+.size-names button:hover:not(:disabled):dir(rtl),
+.size-names button:active:not(:disabled):dir(rtl) {
+  transform: translateX(50%);
+}
+
+.size-names button:hover:not(:disabled),
+.size-names button.on {
+  color: var(--ink);
+}
+
+.size-now {
+  font: 700 calc(13px * var(--text, 1)) var(--font);
+}
+
+/* The Style card's text size: a row like Font's, with a slider for a select. */
+.size-row input[type="range"] {
+  flex: 0 1 150px;
+  min-width: 80px;
+}
+
+.size-row .size-now {
+  min-width: 3.3em;
+  text-align: end;
+}
+
+/* The pictures to pick from, under "Choose image…": Buddybara himself first,
+   then the skins folder's, five a row. */
+.skin-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 18px 12px;
+}
+
+button.skin-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 6px 8px;
+  border-radius: calc(14px * var(--round));
+}
+
+button.skin-tile.on,
+button.skin-tile.on:hover:not(:disabled) {
+  border-color: var(--mikan);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mikan) 30%, transparent);
+}
+
+.skin-tile-art {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+}
+
+.skin-tile-art img {
+  max-width: 72px;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.skin-tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dim);
+  font: 600 calc(11.5px * var(--text, 1)) var(--font);
+}
+
+button.skin-tile.on .skin-tile-name {
+  color: var(--ink);
+}
+
+.skin-folder {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 18px 16px;
+  color: var(--dim);
+  font-size: calc(12px * var(--text, 1));
+}
+
+.skin-folder .grow {
+  flex: 1 1 auto;
+}
+
+/* "Play every state": the step on now. */
+.tour-step {
+  min-width: 11em;
+  color: var(--ink);
+  font: 600 calc(12px * var(--text, 1)) var(--mono);
+}
+
+/* The tile's sidebar holds the selected row; a bubble sits top right, as
+   "your messages" do in the panel. */
+.art-pick {
+  left: 18%;
+  right: 18%;
+  top: 12px;
+  height: 7px;
+}
+
+.art-bubble {
+  right: 8%;
+  top: 9px;
+  width: 26%;
+  height: 11px;
+}
+
+.art-line {
+  top: 26px;
+}
+
+.art-line.short {
+  top: 36px;
 }

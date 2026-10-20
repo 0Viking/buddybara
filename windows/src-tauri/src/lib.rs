@@ -23,6 +23,7 @@ mod platform;
 mod secrets;
 mod session_window;
 mod settings;
+mod skin;
 mod setup;
 mod terminal;
 mod tray;
@@ -79,20 +80,25 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let autostart_changed = {
+    let (autostart_changed, size_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let autostart_changed = current.autostart != settings.autostart;
+        let size_changed = current.buddy_size != settings.buddy_size;
         // Where Buddybara sits on the desktop is desktop.rs's to say, not a webview's.
         let mut settings = settings.clone();
         settings.desktop_buddybara = current.desktop_buddybara.clone();
         // The Projects folder is the buddy's to set (code_pick_projects_folder).
         settings.projects_root = current.projects_root.clone();
+        code::set_session_folders(settings.all_session_folders);
         *current = settings;
-        autostart_changed
+        (autostart_changed, size_changed)
     };
     let settings = shared.settings.lock().unwrap().clone();
     if let Err(err) = settings::save(&settings) {
         log::line(format!("could not save settings: {err}"));
+    }
+    if size_changed {
+        desktop::resize(&app, settings.buddy_size);
     }
     if autostart_changed {
         let manager = app.autolaunch();
@@ -162,6 +168,12 @@ fn focus_window(app: AppHandle, focused: bool) {
 fn reposition(app: AppHandle, shared: State<Shared>) {
     let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
     island::apply_geometry(&app, collapsed);
+}
+
+/// A file or folder a link in an answer points at (files::open_local).
+#[tauri::command]
+async fn open_path(path: String, line: Option<u32>, base: Option<String>) -> Result<(), String> {
+    files::open_local(&path, line, base.as_deref())
 }
 
 #[tauri::command]
@@ -537,6 +549,7 @@ pub fn run() {
     let loaded = settings::load();
     // The chosen Projects folder, before the panel asks for its list.
     code::set_root(loaded.projects_root.clone().map(std::path::PathBuf::from));
+    code::set_session_folders(loaded.all_session_folders);
     i18n::set_picked(&loaded.language);
     let gate = Arc::new(PollGate::new());
 
@@ -566,6 +579,7 @@ pub fn run() {
             focus_window,
             reposition,
             open_url,
+            open_path,
             hooks_status,
             hooks_preview,
             hooks_apply,
@@ -600,6 +614,12 @@ pub fn run() {
             code_say,
             code_stop,
             paste_file,
+            skin::skin_save,
+            skin::skin_remove,
+            skin::skin_get,
+            skin::skin_library,
+            skin::skin_library_get,
+            skin::skin_library_open,
             log_line,
             ingest_file,
             secret_present,

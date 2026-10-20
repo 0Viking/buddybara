@@ -36,6 +36,8 @@ export interface CodeProject {
   path: string;
   sessions: number;
   last: number;
+  /** Not in the projects folder: a folder Claude Code has sessions for (VS Code's, a terminal's). */
+  elsewhere: boolean;
 }
 
 /** One of a project's Claude Code conversations (code.rs Session). */
@@ -71,6 +73,8 @@ export interface SetupStatus {
   signedIn: boolean;
   hooks: boolean;
   root: string;
+  /** Other folders listed because Claude Code has sessions for them. */
+  elsewhere: number;
 }
 
 /** One `code-run` event: what code.rs `events` makes of Claude Code's stream. */
@@ -109,6 +113,9 @@ export const Bridge = {
   reposition: () => call<void>("reposition"),
 
   openUrl: (url: string) => call<void>("open_url", { url }),
+  /** A file or folder a link in an answer points at: shown (VS Code, File Explorer), never run. */
+  openPath: (path: string, line: number | null, base: string | null) =>
+    callOrThrow<void>("open_path", { path, line, base }),
 
   /** `page`: the Settings page to show (settings/main.ts PageId). */
   openSettingsWindow: (page?: string) => call<void>("open_settings_window", { page }),
@@ -247,6 +254,23 @@ export const Bridge = {
   secretPresent: (key: string) => call<boolean>("secret_present", { key }),
   secretSet: (key: string, value: string) => callOrThrow<void>("secret_set", { key, value }),
 
+  // ── His own picture (src-tauri/src/skin.rs) ──────────────────────────────────
+  /** Keeps a picture for the desktop Buddybara (a PNG the page scaled); every window hears `skin-changed`. */
+  skinSave: (png: Uint8Array) => {
+    if (!IS_TAURI) return Promise.reject(new Error("not running inside Buddybara"));
+    return invoke<void>("skin_save", png);
+  },
+  /** Back to the capybara. */
+  skinRemove: () => callOrThrow<void>("skin_remove"),
+  /** The picture's bytes: empty when he is the capybara. */
+  skinGet: () => call<ArrayBuffer>("skin_get"),
+  /** The pictures to pick from: the PNGs of the skins folder, by name. */
+  skinLibrary: () => call<SkinLibrary>("skin_library"),
+  /** One of them, by name: its bytes, empty when it is gone. */
+  skinLibraryGet: (name: string) => call<ArrayBuffer>("skin_library_get", { name }),
+  /** The skins folder in the file manager (made if it isn't there yet). */
+  skinLibraryOpen: () => callOrThrow<void>("skin_library_open"),
+
   // ── Buddybara on the desktop (src-tauri/src/desktop.rs) ───────────────────────
   desktopInfo: () => call<DesktopInfo>("desktop_buddybara_info"),
   /** A drag started on the desktop Buddybara; resolves to his top-left corner. */
@@ -269,12 +293,21 @@ export const Bridge = {
 /** How the desktop Buddybara's window works here (platform::DesktopMode). */
 export type DesktopMode = "poll" | "window" | "layer" | "off";
 
+export interface SkinLibrary {
+  /** The skins folder. */
+  dir: string;
+  /** Its PNGs' names (without ".png"), in the order to show them. */
+  names: string[];
+}
+
 export interface DesktopInfo {
   mode: DesktopMode;
   /** He was on the desktop when the app last quit. */
   onDesktop: boolean;
   /** His window is on screen now (a page loading late still learns to draw). */
   shown: boolean;
+  /** Side of his window, logical pixels (Settings → Customization's size). */
+  side: number;
 }
 
 /** An event for one window only (island ⇄ desktop Buddybara). Never throws. */

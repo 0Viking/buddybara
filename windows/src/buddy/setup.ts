@@ -71,6 +71,16 @@ export class Setup {
     this.el.classList.remove("open");
   }
 
+  /** Sessions started elsewhere (VS Code, a terminal) are listed too: said under the folder. */
+  private projectsStep(s: SetupStatus, el: HTMLElement): HTMLElement {
+    if (!s.elsewhere) return el;
+    const also = s.elsewhere === 1
+      ? t("Also listed: 1 other folder with Claude Code sessions.")
+      : t("Also listed: {count} other folders with Claude Code sessions.", { count: s.elsewhere });
+    el.querySelector(".b-setup-step-text")?.append(h("small", { text: also }));
+    return el;
+  }
+
   private render() {
     const s = this.status;
     clear(this.el);
@@ -94,8 +104,8 @@ export class Setup {
           s.claude ? null : button(t("Install"), () => this.start("install", (x) => x.claude), true)),
         step(s.signedIn, t("Sign in"), s.signedIn ? t("Signed in") : t("Your Claude account, in your browser."),
           s.signedIn ? null : button(t("Sign in"), () => this.start("login", (x) => x.signedIn), true, !s.claude)),
-        step(true, t("Projects folder"), s.root,
-          button(t("Change"), () => void this.chooseFolder().then(() => this.check()), false)),
+        this.projectsStep(s, step(true, t("Projects folder"), s.root,
+          button(t("Change"), () => void this.chooseFolder().then(() => this.check()), false))),
         step(s.hooks, t("Claude Code hooks"),
           s.hooks ? t("Installed") : t("So Buddybara sees your sessions and shows their permission requests. Settings shows the change before writing it."),
           s.hooks ? null : button(t("Skip"), () => {

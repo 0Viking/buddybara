@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="en">
+<!-- Dark until settings.css and the scheme load, not a white flash. On <html>,
+     not on <body>, where it would beat the scheme's colours; and not in a
+     <style> tag: Tauri gives those a CSP nonce, which turns off 'unsafe-inline'
+     and with it every style="" the pages set (the scheme previews). -->
+<html lang="en" style="background: var(--bg, #15110e); color: var(--ink, #f7efe6)">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Settings — Buddybara</title>
   </head>
-  <body class="settings-window" style="background: #15110e; color: #f7efe6">
+  <body class="settings-window">
     <div id="settings-root"><p style="padding: 24px">Loading…</p></div>
     <script type="module" src="/src/settings/main.ts"></script>
   </body>

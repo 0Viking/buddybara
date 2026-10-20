@@ -7,6 +7,7 @@ import { State, type Settings } from "./core/state";
 import { refreshClaudePlan, registerHookHandlers } from "./island/hooks";
 import { onLanguageChange, resolveLanguage, setLanguage, systemLanguages } from "./i18n/i18n";
 import { Buddy } from "./buddy/buddy";
+import { applyTextSize, applyTheme } from "./core/theme";
 
 /** Shows the language Settings asks for ("" = the system's, when Buddybara has it). */
 function applyLanguage() {
@@ -24,6 +25,8 @@ async function loadSettings() {
   // rebuilt, so tasks, steps and the chat stay as they are.
   onLanguageChange(() => State.notify());
   applyLanguage();
+  applyTheme(State.settings.theme, State.settings.themeCustom);
+  applyTextSize(State.settings.textSize);
   // Rust shows the tray and its errors in the same language as the webview.
   void Bridge.setSystemLanguages(systemLanguages());
   return boot;
@@ -69,9 +72,13 @@ async function startBuddy(root: HTMLElement) {
     await onEvent<null>("screen-changed", () => void Bridge.reposition());
     await onEvent<Settings>("settings-changed", (s) => {
       const planWasOn = State.settings.showPlanInNotch;
+      const foldersWere = State.settings.allSessionFolders;
       State.settings = { ...State.settings, ...s };
+      if (State.settings.allSessionFolders !== foldersWere) void buddy.refreshProjects();
       applyLanguage();
       applySound();
+      applyTheme(State.settings.theme, State.settings.themeCustom);
+      applyTextSize(State.settings.textSize);
       // Just switched on in Settings: the mikan shows the numbers at once.
       if (!planWasOn) refreshClaudePlan(true);
       State.notify();

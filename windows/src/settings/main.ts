@@ -13,6 +13,9 @@ import { connectorsPage } from "./connectors";
 import { INTEGRATION_KEYS, integrationsPage } from "./integrations";
 import { MODEL_KEYS, modelsPage } from "./models";
 import { directoryPage } from "./directory";
+import { customizePage } from "./customize";
+import { applyTextSize, applyTheme } from "../core/theme";
+import { loadSkin } from "../buddybara/skin";
 import {
   LANGUAGES, N_, isRtl, onLanguageChange, resolveLanguage, setLanguage, systemLanguages, t,
 } from "../i18n/i18n";
@@ -342,6 +345,11 @@ function generalPage(): HTMLElement {
     ),
     h("div", { class: "card" },
       srow(t("Launch at startup"), null, toggle(settings.autostart, (v) => { settings.autostart = v; void save(); })),
+      srow(
+        t("Show other folders with sessions"),
+        t("Lists every folder Claude Code was used in (VS Code, a terminal), not only the projects folder's, so their sessions can be continued from the panel."),
+        toggle(settings.allSessionFolders, (v) => { settings.allSessionFolders = v; void save(); }),
+      ),
       srow(t("Language"), null, languageSelect()),
     ),
   );
@@ -367,10 +375,11 @@ function languageSelect(): HTMLElement {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-type PageId = "general" | "claude" | "agents" | "models" | "skills" | "plugins" | "connectors" | "integrations";
+type PageId = "general" | "customize" | "claude" | "agents" | "models" | "skills" | "plugins" | "connectors" | "integrations";
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "general", label: N_("General"), icon: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4" },
+  { id: "customize", label: N_("Customization"), icon: "M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8l-.4-.9c-.5-1 .3-2.3 1.4-2.3H17a4 4 0 0 0 4-4c0-5-4-9-9-9zM7.5 12a1 1 0 1 0 0-.01M10 7.5a1 1 0 1 0 0-.01M15 7.5a1 1 0 1 0 0-.01" },
   { id: "claude", label: "Claude Code", icon: "M4 6l6 6-6 6M12 18h8" },
   { id: "agents", label: N_("Agents"), icon: "M8 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M16 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0" },
   { id: "models", label: N_("AI models"), icon: "M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4zM9 10h6" },
@@ -452,7 +461,17 @@ async function main() {
     version = boot.version;
   }
   setLanguage(resolveLanguage(settings.language, systemLanguages()));
+  applyTheme(settings.theme, settings.themeCustom);
+  applyTextSize(settings.textSize);
   applyDirection();
+  // The corner Buddybara wears the desktop one's picture too.
+  const wearSkin = async () => {
+    engine.skin?.close();
+    engine.skin = await loadSkin();
+    drawMascot(0);
+  };
+  void wearSkin();
+  void onEvent<null>("skin-changed", () => void wearSkin());
   onLanguageChange(() => {
     applyDirection();
     void rerender();
@@ -460,8 +479,12 @@ async function main() {
   await render();
 
   void onEvent<Settings>("settings-changed", (s) => {
-    settings = { ...settings, ...s };
+    // In place: the page on screen holds this very object, and a copy would
+    // leave it changing a stale one (its next save would undo this).
+    Object.assign(settings, s);
     applyLanguage();
+    applyTheme(settings.theme, settings.themeCustom);
+    applyTextSize(settings.textSize);
   });
   // Opened for one page (the panel's first-run screen: Claude Code).
   void onEvent<string>("settings-page", (p) => {
@@ -493,6 +516,8 @@ async function render() {
     body = directoryPage(page);
   } else if (page === "connectors") {
     body = connectorsPage();
+  } else if (page === "customize") {
+    body = customizePage(settings, save);
   } else {
     body = generalPage();
   }

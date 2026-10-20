@@ -33,12 +33,139 @@ export const DESKTOP_EVENTS = {
   cursor: "desktop-cursor",
   visible: "desktop-visible",
   flight: "desktop-flight",
+  /** His window took a new side (Settings → Customization), logical pixels. */
+  size: "desktop-size",
+  /** Settings → desktop window: one step of "Play every state". */
+  preview: "desktop-buddybara-preview",
+  /** Rust → desktop window (Windows): the cursor's x while he is carried, logical pixels. */
+  carried: "desktop-carried",
 } as const;
+
+// ── What he does when handled ─────────────────────────────────────────────────
+
+/** Shaken while carried: this many turns back and forth… */
+export const SHAKE_TURNS = 3;
+/** …each after a swing of at least this many logical pixels… */
+export const SHAKE_SWING = 28;
+/** …all within this long, and he is dizzy. */
+export const SHAKE_WINDOW_MS = 1500;
+
+/** Watches where he is carried across the screen, for a shake. */
+export class ShakeMeter {
+  private started = false;
+  /** The way he swings now (−1 left, 1 right, 0 not yet), and how far it went. */
+  private dir = 0;
+  private extreme = 0;
+  private turns: number[] = [];
+
+  /** One more position across (logical px) at `t` ms; true when it made him dizzy. */
+  feed(t: number, x: number): boolean {
+    if (!this.started) {
+      this.started = true;
+      this.extreme = x;
+      return false;
+    }
+    const d = x - this.extreme;
+    if (this.dir === 0) {
+      if (Math.abs(d) >= SHAKE_SWING) {
+        this.dir = Math.sign(d);
+        this.extreme = x;
+      }
+      return false;
+    }
+    // Still going the same way: the swing goes on.
+    if (Math.sign(d) === this.dir) {
+      this.extreme = x;
+      return false;
+    }
+    if (Math.abs(d) < SHAKE_SWING) return false;
+    this.dir = -this.dir;
+    this.extreme = x;
+    this.turns = this.turns.filter((at) => t - at <= SHAKE_WINDOW_MS);
+    this.turns.push(t);
+    if (this.turns.length < SHAKE_TURNS) return false;
+    this.turns = [];
+    return true;
+  }
+
+  /** A new drag: nothing of the last one counts. */
+  reset() {
+    this.started = false;
+    this.dir = 0;
+    this.turns = [];
+  }
+}
+
+/** Poked this many times… */
+export const POKES = 4;
+/** …within this long, he is annoyed. */
+export const POKE_WINDOW_MS = 2000;
+
+/** Counts the clicks on him, for too many too fast. */
+export class PokeCounter {
+  private at: number[] = [];
+
+  /** A click on him at `t` ms; true when it was one too many. */
+  poke(t: number): boolean {
+    this.at = this.at.filter((x) => t - x <= POKE_WINDOW_MS);
+    this.at.push(t);
+    if (this.at.length < POKES) return false;
+    this.at = [];
+    return true;
+  }
+}
+
+/** The pointer resting on him this long, idle… */
+export const WINK_REST_MS = 2000;
+/** …he winks, this often… */
+export const WINK_CHANCE = 0.6;
+/** …and not again for this long. */
+export const WINK_COOLDOWN_MS = 15000;
+
+/**
+ * One step of Settings' "Play every state": shown on the desktop Buddybara
+ * for `ms`, over whatever his sessions say, then he is back to that.
+ */
+export interface DesktopPreview {
+  state: BotStateName;
+  emote?: BotEmoteName;
+  greet?: boolean;
+  /** An idle fidget (BotEngine.fidget's kind). */
+  fidget?: number;
+  ms: number;
+}
+
+/** Every step of "Play every state", named as the engine names them. */
+export const PREVIEW_STEPS: readonly (DesktopPreview & { name: string })[] = [
+  { name: "idle", state: "idle", ms: 2500 },
+  { name: "idle · hop", state: "idle", fidget: 0, ms: 1800 },
+  { name: "idle · wiggle", state: "idle", fidget: 1, ms: 1800 },
+  { name: "idle · stretch", state: "idle", fidget: 2, ms: 1800 },
+  { name: "greet", state: "idle", greet: true, ms: 2600 },
+  { name: "thinking", state: "thinking", ms: 3500 },
+  { name: "working", state: "working", ms: 3500 },
+  { name: "searching", state: "searching", ms: 3500 },
+  { name: "question", state: "question", ms: 3000 },
+  { name: "approval", state: "approval", ms: 3000 },
+  { name: "ratelimit", state: "ratelimit", ms: 3000 },
+  { name: "error", state: "error", ms: 2600 },
+  { name: "finished", state: "finished", ms: 3000 },
+  { name: "dizzy", state: "dizzy", ms: 2600 },
+  { name: "sleeping", state: "sleeping", ms: 4500 },
+  ...(["love", "surprised", "proud", "wink", "yawn", "happy", "annoyed"] as const).map((emote) => ({
+    name: emote, state: "idle" as const, emote, ms: 2200,
+  })),
+];
 
 // ── Constants (DesktopBuddybaraLogic) ────────────────────────────────────────────
 
-/** Side of the desktop window, logical pixels. */
+/** Side of the desktop window at his usual size (100 %), logical pixels. */
 export const PANEL_SIZE = 120;
+/**
+ * The sizes Settings → Customization offers, in percent of PANEL_SIZE: three
+ * smaller, his own, three bigger (desktop.rs logic::SIZES).
+ */
+export const BUDDY_SIZES = [50, 65, 80, 100, 125, 160, 200] as const;
 /** Seconds without agent activity before he may fall asleep. */
 export const SLEEP_TIMEOUT = 120;
 /** He only dozes off once the pointer is at least this far from him. */
@@ -64,6 +191,25 @@ export interface Point {
  */
 export function shouldSleep(sinceAgentActive: number, mouseDistanceToCenter: number): boolean {
   return sinceAgentActive > SLEEP_TIMEOUT && mouseDistanceToCenter >= SLEEP_MOUSE_DISTANCE;
+}
+
+/**
+ * The nearest of BUDDY_SIZES to a size in percent, the smaller of two as near,
+ * as desktop.rs logic::side_for reads it. Not a number: his usual size.
+ */
+export function buddySize(percent: number): number {
+  if (!Number.isFinite(percent)) return 100;
+  return BUDDY_SIZES.reduce<number>((best, s) => (Math.abs(s - percent) < Math.abs(best - percent) ? s : best), BUDDY_SIZES[0]);
+}
+
+/**
+ * His minimize button in a window of side `side`: its centre, top-right of
+ * his head, and how much it is scaled — it grows less than he does
+ * (desktop.rs logic::hide_button, which takes its clicks there).
+ */
+export function hideButton(side: number): { x: number; y: number; scale: number } {
+  const k = side / PANEL_SIZE;
+  return { x: 94 * k, y: 28 * k, scale: Math.min(1.3, Math.max(0.8, k)) };
 }
 
 /** Hit test of the round body inside the square window (window-local). */

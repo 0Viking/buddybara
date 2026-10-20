@@ -30,6 +30,7 @@ import {
   tooBig, userLine, type Chat, type Line, type OtherModel,
 } from "./run";
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
+import { THEME_EVENT } from "../core/theme";
 import { BuddyTerminal, type TermTarget } from "./terminal";
 import { Setup } from "./setup";
 import { renderUsage } from "./usage";
@@ -193,11 +194,12 @@ function sentView(text: string, files: string[] | undefined, queued = false): HT
   );
 }
 
-function lineView(line: Line): HTMLElement {
+/** `base`: the conversation's project, where the relative paths its answers link start. */
+function lineView(line: Line, base: string): HTMLElement {
   if (line.role === "user") return sentView(line.text, line.files);
   if (line.role === "assistant") {
     const reply = h("div", { class: "reply" });
-    renderMarkdown(reply, line.text);
+    renderMarkdown(reply, line.text, base);
     return h("div", { class: "chat-row" }, reply);
   }
   return h("div", { class: line.role === "step" ? "b-step" : "b-error", text: line.text });
@@ -460,6 +462,19 @@ export class Buddy {
       this.fitInput();
       if (this.chat && this.pinned) this.body.scrollTop = this.body.scrollHeight;
     });
+    // The field's height again whenever what it is measured with changes: its
+    // width (the panel unfolding after a start), its font (another scheme, a
+    // font that finished loading).
+    let fieldWidth = 0;
+    new ResizeObserver(() => {
+      if (this.input.clientWidth === fieldWidth) return;
+      fieldWidth = this.input.clientWidth;
+      // Next frame: resizing the field it watches inside its own callback,
+      // the observer would report a loop.
+      requestAnimationFrame(() => this.fitInput());
+    }).observe(this.input);
+    window.addEventListener(THEME_EVENT, () => this.fitInput());
+    void document.fonts.ready.then(() => this.fitInput());
     // A screenshot (or a copied file) pasted anywhere in the panel is attached;
     // text is left to the field.
     document.addEventListener("paste", (e) => this.onPaste(e));
@@ -657,6 +672,18 @@ export class Buddy {
     this.renderProjects();
   }
 
+  /** Settings changed which folders are listed: the list again, and away from one no longer in it. */
+  async refreshProjects() {
+    await this.loadProjects();
+    const p = this.project;
+    if (p && !this.projects.some((x) => samePath(x.path) === samePath(p.path)) && this.chat?.run == null) {
+      this.project = null;
+      this.chat = null;
+      this.sessions = null;
+      this.render();
+    }
+  }
+
   /** The folder button by "Projects": pick the folder whose subfolders the list shows. */
   private async chooseFolder() {
     let path: string | null;
@@ -782,7 +809,7 @@ export class Buddy {
     }
     const cwd = task.sessionCwd.toLowerCase().replace(/[\\/]+$/, "");
     const project = this.projects.find((p) => p.path.toLowerCase() === cwd)
-      ?? { name: folderOf(task.sessionCwd), path: task.sessionCwd, sessions: 0, last: 0 };
+      ?? { name: folderOf(task.sessionCwd), path: task.sessionCwd, sessions: 0, last: 0, elsewhere: true };
     this.show(true);
     void this.openSession(project, task.sessionId, project.name);
   }
@@ -1029,7 +1056,7 @@ export class Buddy {
     if (!btw?.lines.length) {
       this.btwLog.append(h("div", { class: "b-hint", text: t("Ask Claude something on the side: it answers from a copy of this conversation, which stays as it is.") }));
     }
-    for (const line of btw?.lines ?? []) this.btwLog.append(lineView(line));
+    for (const line of btw?.lines ?? []) this.btwLog.append(lineView(line, btw!.project.path));
     if (btw?.run != null) this.btwLog.append(h("div", { class: "chat-row" }, h("div", { class: "typing" }, h("i"), h("i"), h("i"))));
     this.btwInput.placeholder = t("Ask on the side…");
     requestAnimationFrame(() => (this.btwLog.scrollTop = this.btwLog.scrollHeight));
@@ -1359,10 +1386,14 @@ export class Buddy {
 
   private renderProjects() {
     const news = this.projectNotices();
-    const rows = this.projects.map((p) => [p.name, p.path, p.sessions, this.working(p.path), news.get(samePath(p.path)) ?? null]);
+    const rows = this.projects.map((p) => [p.name, p.path, p.sessions, p.elsewhere, this.working(p.path), news.get(samePath(p.path)) ?? null]);
     keyed(this.list, [this.project?.path, rows], () => {
       clear(this.list);
-      for (const p of this.projects) {
+      // The projects folder's first; then the folders Claude Code has sessions
+      // for elsewhere (VS Code's, a terminal's), under a heading of their own.
+      const first = this.projects.findIndex((p) => p.elsewhere);
+      this.projects.forEach((p, i) => {
+        if (i === first) this.list.append(h("div", { class: "b-side-sub", text: t("Other folders with sessions") }));
         const kind = news.get(samePath(p.path));
         const row = h(
           "button",
@@ -1374,7 +1405,7 @@ export class Buddy {
         );
         row.addEventListener("click", () => void this.pickProject(p));
         this.list.append(row);
-      }
+      });
     });
   }
 
@@ -1892,7 +1923,7 @@ export class Buddy {
   private renderChat(chat: Chat) {
     const log = h("div", { class: "b-log" });
     if (chat.loading) log.append(h("div", { class: "b-hint", text: t("Loading…") }));
-    for (const line of chat.lines) log.append(lineView(line));
+    for (const line of chat.lines) log.append(lineView(line, chat.project.path));
     if (chat.run != null) {
       log.append(h("div", { class: "chat-row" }, h("div", { class: "typing" }, h("i"), h("i"), h("i"))));
     }
@@ -1989,7 +2020,13 @@ export class Buddy {
 
   /** The text field grows with what is typed, up to a few lines. */
   private fitInput() {
-    this.input.style.height = "auto";
-    this.input.style.height = `${Math.min(120, this.input.scrollHeight)}px`;
+    const input = this.input;
+    // Folded to its one pixel, the field has no width to be measured by.
+    if (input.clientWidth < 40) return;
+    input.style.height = "auto";
+    const full = input.scrollHeight;
+    input.style.height = `${Math.min(120, full)}px`;
+    // A scrollbar only once it is as tall as it gets.
+    input.style.overflowY = full > 120 ? "auto" : "hidden";
   }
 }

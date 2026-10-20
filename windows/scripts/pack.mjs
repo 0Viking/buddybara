@@ -1,6 +1,16 @@
 // Copies the packages Tauri buries in target/release/bundle/ into
 // windows/release/, with the names they ship under. Used by `npm run pack` and
 // by the release workflows, so both produce exactly the same file names.
+//
+// An edition is the same app built with something more in its bundle, given
+// by a config file of its own that is kept out of this repository — skins
+// that may not be published, say:
+//
+//   npx tauri build --config <edition.json> && node scripts/pack.mjs --edition <Name>
+//
+// with, in edition.json: { "bundle": { "resources": { "<dir>/*.png": "skins/" } } }
+// (Tauri merges it over tauri.conf.json; skin.rs lists `skins/`). Its packages
+// are named Buddybara-<Name>-…, beside the plain ones.
 
 import { readFileSync, mkdirSync, copyFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -12,6 +22,15 @@ const outDir = join(root, "release");
 
 const { version } = JSON.parse(readFileSync(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
+const editionAt = process.argv.indexOf("--edition");
+const edition = editionAt > 0 ? process.argv[editionAt + 1] ?? "" : "";
+if (editionAt > 0 && !/^[A-Za-z0-9]+$/.test(edition)) {
+  console.error("--edition takes a name of letters and digits.");
+  process.exit(1);
+}
+/** "Buddybara" or "Buddybara-<edition>": what every package name starts with. */
+const app = edition ? `Buddybara-${edition}` : "Buddybara";
+
 // What each platform ships: where Tauri puts it, how to recognise it, and the
 // names it is published under (the rolling name, when there is one, always
 // points at the latest release).
@@ -22,17 +41,17 @@ const PACKAGES = {
     {
       dir: "nsis",
       suffix: "-setup.exe",
-      names: [`Buddybara-Windows-${version}-setup.exe`, "Buddybara-Windows-setup.exe"],
+      names: [`${app}-Windows-${version}-setup.exe`, `${app}-Windows-setup.exe`],
     },
   ],
   linux: [
     {
       dir: "appimage",
       suffix: ".AppImage",
-      names: [`Buddybara-Linux-${version}-${arch}.AppImage`, `Buddybara-Linux-${arch}.AppImage`],
+      names: [`${app}-Linux-${version}-${arch}.AppImage`, `${app}-Linux-${arch}.AppImage`],
     },
-    { dir: "deb", suffix: ".deb", names: [`Buddybara-Linux-${version}-${debArch}.deb`] },
-    { dir: "rpm", suffix: ".rpm", names: [`Buddybara-Linux-${version}-${arch}.rpm`] },
+    { dir: "deb", suffix: ".deb", names: [`${app}-Linux-${version}-${debArch}.deb`] },
+    { dir: "rpm", suffix: ".rpm", names: [`${app}-Linux-${version}-${arch}.rpm`] },
   ],
 };
 

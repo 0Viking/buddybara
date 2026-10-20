@@ -128,6 +128,80 @@ pub fn move_to_trash(paths: &[PathBuf]) -> Result<(), String> {
 
 /// The shell's own way to open a link in the default browser.
 pub fn open_url(url: &str) {
+    shell_open(url);
+}
+
+/// A folder in File Explorer. Only ever a folder: ShellExecute's "open" runs
+/// a file, which a link in an answer must never do.
+pub fn open_folder(dir: &std::path::Path) {
+    if dir.is_dir() {
+        shell_open(&plain_path(dir));
+    }
+}
+
+/// What a file link opens with.
+#[derive(Debug, PartialEq)]
+pub enum Opener {
+    /// A picture or a PDF: its own viewer (Photos, the PDF reader).
+    Viewer,
+    /// Anything else: VS Code, at its line.
+    Editor,
+    /// No VS Code: the file selected in File Explorer.
+    Explorer,
+}
+
+/// Pictures and PDFs, which their viewers show. ShellExecute's "open" runs
+/// anything else it is given (a .bat, an .exe), which a link must never do.
+const VIEWED: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "tif", "tiff", "pdf"];
+
+fn opener(file: &std::path::Path, editor: bool) -> Opener {
+    let ext = file.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    if VIEWED.contains(&ext.as_str()) {
+        Opener::Viewer
+    } else if editor {
+        Opener::Editor
+    } else {
+        Opener::Explorer
+    }
+}
+
+/// A file a link in an answer points at: a picture or a PDF in its viewer,
+/// anything else in VS Code at its line (its own `code` command: a vscode://
+/// link makes VS Code ask first), or, without VS Code, selected in File
+/// Explorer. Shown, never run (a .bat, an .exe).
+pub fn show_file(file: &std::path::Path, line: Option<u32>) -> Opener {
+    let path = plain_path(file);
+    let code = find_on_path("code");
+    let how = opener(file, code.is_some());
+    match (&how, code) {
+        (Opener::Viewer, _) => shell_open(&path),
+        (Opener::Editor, Some(code)) => {
+            let mut cmd = Command::new(code);
+            match line {
+                Some(n) => cmd.arg("-g").arg(format!("{path}:{n}")),
+                None => cmd.arg(&path),
+            };
+            let _ = no_console(&mut cmd).spawn();
+        }
+        _ => {
+            // Windows paths can't hold a quote: the quoting below is enough.
+            let _ = no_console(Command::new("explorer.exe").raw_arg(format!("/select,\"{path}\""))).spawn();
+        }
+    }
+    how
+}
+
+/// `\\?\C:\x` (what canonicalize gives) as `C:\x`, `\\?\UNC\s\x` as `\\s\x`.
+fn plain_path(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+    }
+}
+
+fn shell_open(target: &str) {
     use ::windows::core::{w, PCWSTR};
     use ::windows::Win32::System::Com::{
         CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
@@ -135,7 +209,7 @@ pub fn open_url(url: &str) {
     use ::windows::Win32::UI::Shell::ShellExecuteW;
     use ::windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    let wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
     // ShellExecute may wait on the browser and wants a single-threaded COM
     // apartment, so it runs on a thread of its own, off the caller's.
     std::thread::spawn(move || unsafe {
@@ -468,4 +542,28 @@ pub fn set_layer_overlay(_win: &WebviewWindow, _on: bool) {}
 /// Layer-shell only (Linux): the logical size of the display the island is on.
 pub fn layer_display(_island: &WebviewWindow, _buddybara: &WebviewWindow) -> Option<(f64, f64)> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{opener, plain_path, Opener};
+    use std::path::Path;
+
+    #[test]
+    fn pictures_open_in_their_viewer_the_rest_in_the_editor_and_nothing_runs() {
+        assert_eq!(opener(Path::new(r"C:\d\shot.JPG"), true), Opener::Viewer);
+        assert_eq!(opener(Path::new(r"C:\d\spec.pdf"), false), Opener::Viewer);
+        assert_eq!(opener(Path::new(r"C:\d\main.ts"), true), Opener::Editor);
+        for runs in [r"C:\d\clear.bat", r"C:\d\setup.exe", r"C:\d\x.ps1", r"C:\d\noext"] {
+            assert_eq!(opener(Path::new(runs), true), Opener::Editor, "{runs}");
+            assert_eq!(opener(Path::new(runs), false), Opener::Explorer, "{runs}");
+        }
+    }
+
+    #[test]
+    fn canonical_paths_lose_their_verbatim_prefix() {
+        assert_eq!(plain_path(Path::new(r"\\?\C:\Users\me\x.txt")), r"C:\Users\me\x.txt");
+        assert_eq!(plain_path(Path::new(r"\\?\UNC\server\share\x")), r"\\server\share\x");
+        assert_eq!(plain_path(Path::new(r"C:\plain")), r"C:\plain");
+    }
 }

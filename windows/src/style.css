@@ -14,29 +14,61 @@
     "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans SC", "Droid Sans Fallback", sans-serif;
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 
-  --ink: #f7efe6;        /* primary text */
-  --ink-2: #efe6dc;
-  --dim: #b4a799;
-  --dim-2: #a3968a;
-  --dim-3: #857a6f;
-  --dim-4: #6e6359;
-  --dim-5: #5a5048;
+  /* The theme: Buddybara's own scheme here; Settings → Customization sets
+     others on the root element (core/theme.ts). */
+  --bg: #15110e;
+  --side: #1b1713;
   --card: #1e1915;
-  --card-flat: #15110e;
-  --tab-on: #29221c;
-  --hairline: rgba(255, 236, 214, 0.04);
+  --ink: #f7efe6;        /* primary text */
+  --dim: #b4a799;
+  /* The mikan's orange, the accent, and the dark ink that goes on it. */
+  --mikan: #ff8a3d;
+  --mikan-ink: #2b1405;
+  --composer: #231e1a;
+  --selected: #362215;
+  --bubble: #3a2416;
+  --code: #e3d8cc;
+  --code-bg: #100c0a;
+  --link: #ffb27a;
+  /* Lines and hovers: a little of it over the background. */
+  --tint: #ffecd6;
+  /* Text on the sidebar, on the selected project, and in your messages. */
+  --side-ink: #f7efe6;
+  --selected-ink: #ff8a3d;
+  --bubble-ink: #efe6dc;
+  /* The scheme's style: corners and lines as drawn here at 1, rounder or
+     squarer, stronger or fainter otherwise (core/theme.ts CORNERS, LINES). */
+  --round: 1;
+  --lines: 1;
+
   --red: #ff6b6b;
   --red-text: #ff9b9b;
   --green: #5fd38a;
   --green-2: #5fd38a;
   --amber: #ffc048;
   --cyan: #22d3ee;
-  --indigo: #ff8a3d;
   --pink: #f472b6;
-  /* The mikan's orange, the accent, and the dark ink that goes on it. */
-  --mikan: #ff8a3d;
-  --mikan-ink: #2b1405;
-  --raised: #29221c;
+}
+
+/* Mixed from the theme, so every scheme gets all of them. The sidebar mixes
+   its own from its colours (buddy.css .b-side): a dark sidebar beside a light
+   page, or the other way round, keeps legible shades. */
+:root,
+.b-side {
+  --ink-2: color-mix(in srgb, var(--ink) 95%, var(--bg));
+  --ink-3: color-mix(in srgb, var(--ink) 90%, var(--bg));
+  --ink-4: color-mix(in srgb, var(--ink) 85%, var(--bg));
+  --dim-2: color-mix(in srgb, var(--dim) 90%, var(--bg));
+  --dim-3: color-mix(in srgb, var(--dim) 72%, var(--bg));
+  --dim-4: color-mix(in srgb, var(--dim) 58%, var(--bg));
+  --dim-5: color-mix(in srgb, var(--dim) 46%, var(--bg));
+  --card-flat: var(--bg);
+  --raised: color-mix(in srgb, var(--card) 95%, var(--ink));
+  --tab-on: var(--raised);
+  --menu: color-mix(in srgb, var(--card) 97%, var(--ink));
+  --hairline: color-mix(in srgb, var(--tint) calc(4% * var(--lines)), transparent);
+  --accent-hover: color-mix(in srgb, var(--mikan) 85%, white);
+  --indigo: var(--mikan);
 }
 
 * {
@@ -70,7 +102,7 @@ body {
   top: 0;
   left: 50%;
   background: #000;
-  border-radius: 0 0 14px 14px;
+  border-radius: 0 0 calc(14px * var(--round)) calc(14px * var(--round));
   overflow: visible;
   will-change: width, height, transform;
 }
@@ -102,14 +134,14 @@ body {
   place-items: center;
   border: 0;
   background: transparent;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--round));
   color: var(--dim-2);
   cursor: default;
 }
 
 .tab:hover {
-  background: rgba(255, 236, 214, 0.07);
-  color: #d8ccbf;
+  background: color-mix(in srgb, var(--tint) calc(7% * var(--lines)), transparent);
+  color: var(--ink-4);
 }
 
 .tab.on {
@@ -152,7 +184,7 @@ body {
 .card {
   position: relative;
   height: 100%;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--round));
   background: var(--card);
   border: 1px solid var(--hairline);
   overflow: hidden;
@@ -173,7 +205,7 @@ body {
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 
 .btn {
-  font: 500 12.5px var(--font);
+  font: 500 calc(12.5px * var(--text, 1)) var(--font);
   padding: 7px 13px;
   border: 0;
   border-radius: 999px;
@@ -190,7 +222,7 @@ body {
 
 .btn.primary {
   background: var(--ink);
-  color: #0b0c0e;
+  color: var(--mikan-ink);
 }
 
 .who {
@@ -202,7 +234,7 @@ body {
 }
 
 .who .name {
-  font: 600 12px var(--font);
+  font: 600 calc(12px * var(--text, 1)) var(--font);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -210,13 +242,13 @@ body {
 }
 
 .who .tool {
-  font: 400 11px var(--font);
+  font: 400 calc(11px * var(--text, 1)) var(--font);
   color: var(--dim-2);
   white-space: nowrap;
 }
 
 .who .count {
-  font: 400 11px var(--font);
+  font: 400 calc(11px * var(--text, 1)) var(--font);
   color: var(--dim-3);
   margin-left: auto;
   flex: 0 0 auto;
@@ -265,7 +297,7 @@ body {
   height: 28px;
   border-radius: 999px;
   background: var(--card-flat);
-  border: 1px solid rgba(255, 236, 214, 0.14);
+  border: 1px solid color-mix(in srgb, var(--tint) calc(14% * var(--lines)), transparent);
   display: flex;
   align-items: center;
   cursor: default;
@@ -281,15 +313,15 @@ body {
 /* ── Generic text blocks ────────────────────────────────────────────────── */
 
 .title {
-  font: 600 15px var(--font);
+  font: 600 calc(15px * var(--text, 1)) var(--font);
 }
 
 .code {
-  font: 400 12px var(--mono);
-  color: #f7efe6;
-  background: rgba(255, 236, 214, 0.07);
-  border: 1px solid rgba(255, 236, 214, 0.06);
-  border-radius: 10px;
+  font: 400 calc(12px * var(--text, 1)) var(--mono);
+  color: var(--code);
+  background: color-mix(in srgb, var(--tint) calc(7% * var(--lines)), transparent);
+  border: 1px solid color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
+  border-radius: calc(10px * var(--round));
   padding: 5px 10px;
   max-width: 100%;
   white-space: nowrap;
@@ -329,8 +361,8 @@ body {
   position: relative;
   width: 32px;
   height: 18px;
-  border-radius: 9px;
-  background: rgba(255, 236, 214, 0.15);
+  border-radius: calc(9px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(15% * var(--lines)), transparent);
   flex: 0 0 32px;
   transition: background 0.18s;
   cursor: default;
@@ -361,8 +393,8 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 236, 214, 0.2);
+  border-radius: calc(2px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(20% * var(--lines)), transparent);
   width: 72px;
 }
 
@@ -381,7 +413,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .seg button {
-  font: 400 11px var(--font);
+  font: 400 calc(11px * var(--text, 1)) var(--font);
   padding: 3px 7px;
   border: 0;
   border-radius: 999px;
@@ -391,7 +423,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .seg button.on {
-  background: #252830;
+  background: var(--raised);
   color: var(--ink);
 }
 
@@ -407,16 +439,16 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 236, 214, 0.1);
-  font: 400 11.5px var(--font);
+  background: color-mix(in srgb, var(--tint) calc(10% * var(--lines)), transparent);
+  font: 400 calc(11.5px * var(--text, 1)) var(--font);
   color: var(--ink-2);
-  border: 1.5px solid rgba(255, 236, 214, 0.75);
+  border: 1.5px solid color-mix(in srgb, var(--tint) calc(75% * var(--lines)), transparent);
   transform: scale(1.06);
   transition: border-color 0.3s ease-out 0.45s, transform 0.3s ease-out 0.45s;
 }
 
 .chip.settled {
-  border-color: rgba(255, 236, 214, 0);
+  border-color: color-mix(in srgb, var(--tint) calc(0% * var(--lines)), transparent);
   transform: scale(1);
 }
 
@@ -430,18 +462,18 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .bubble {
-  background: rgba(255, 138, 61, 0.16);
-  border-radius: 12px;
+  background: var(--bubble);
+  border-radius: calc(12px * var(--round));
   padding: 6px 10px;
-  font: 400 12.5px var(--font);
-  color: var(--ink-2);
+  font: 400 calc(12.5px * var(--text, 1)) var(--font);
+  color: var(--bubble-ink);
   white-space: pre-wrap;
   user-select: text;
 }
 
 .reply {
-  font: 400 12.5px var(--font);
-  color: #d8ccbf;
+  font: 400 calc(12.5px * var(--text, 1)) var(--font);
+  color: var(--ink-4);
   white-space: pre-wrap;
   padding-right: 8px;
   user-select: text;
@@ -455,40 +487,59 @@ input[type="range"]::-webkit-slider-thumb {
 /* ── Markdown in the answers ─────────────────────────────────────────────── */
 
 .md-p {
-  font: 400 12.5px var(--font);
-  color: #d8ccbf;
+  font: 400 calc(12.5px * var(--text, 1)) var(--font);
+  color: var(--ink-4);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .md-h {
-  font: 600 13px var(--font);
+  font: 600 calc(13px * var(--text, 1)) var(--font);
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
 .md-h1 {
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--text, 1));
 }
 
 .reply strong {
-  color: #f7efe6;
+  color: var(--ink);
   font-weight: 600;
 }
 
 .md-code {
   padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(255, 236, 214, 0.08);
-  font: 400 11.5px var(--mono);
-  color: #e3d8cc;
+  border-radius: calc(4px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
+  font: 400 calc(11.5px * var(--text, 1)) var(--mono);
+  color: var(--code);
 }
 
 .md-link {
-  color: #ffb27a;
+  color: var(--link);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* `code` that is a path or an address: clickable, without shouting about it. */
+.md-code.md-open {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.md-code.md-open:hover {
+  color: var(--link);
+}
+
+/* A link to a file that isn't there (any more). */
+.md-missing,
+.md-missing:hover {
+  color: var(--dim-3);
+  text-decoration: line-through;
+  cursor: default;
 }
 
 .md-pre {
@@ -496,16 +547,16 @@ input[type="range"]::-webkit-slider-thumb {
   align-items: flex-start;
   gap: 8px;
   padding: 10px;
-  border: 1px solid rgba(255, 236, 214, 0.08);
-  border-radius: 8px;
-  background: #100c0a;
+  border: 1px solid color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
+  border-radius: calc(8px * var(--round));
+  background: var(--code-bg);
 }
 
 .md-pre pre {
   flex: 1 1 auto;
   min-width: 0;
-  font: 400 11px var(--mono);
-  color: #e3d8cc;
+  font: 400 calc(11px * var(--text, 1)) var(--mono);
+  color: var(--code);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -518,8 +569,8 @@ input[type="range"]::-webkit-slider-thumb {
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
-  background: rgba(255, 236, 214, 0.06);
+  border-radius: calc(4px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
   color: var(--dim-3);
   cursor: default;
 }
@@ -541,7 +592,7 @@ input[type="range"]::-webkit-slider-thumb {
 .md-bullet {
   flex: 0 0 auto;
   min-width: 10px;
-  font: 400 12.5px var(--font);
+  font: 400 calc(12.5px * var(--text, 1)) var(--font);
   color: var(--dim-3);
 }
 
@@ -553,18 +604,18 @@ input[type="range"]::-webkit-slider-thumb {
 
 .md-quote i {
   flex: 0 0 2px;
-  border-radius: 1px;
+  border-radius: calc(1px * var(--round));
   background: var(--dim-5);
 }
 
 .md-quote .md-p {
-  color: #9c9084;
+  color: var(--dim-2);
 }
 
 .md-rule {
   width: 100%;
   border: 0;
-  border-top: 1px solid rgba(255, 236, 214, 0.3);
+  border-top: 1px solid color-mix(in srgb, var(--tint) calc(30% * var(--lines)), transparent);
   opacity: 0.3;
 }
 
@@ -602,9 +653,9 @@ input[type="range"]::-webkit-slider-thumb {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border-radius: 12px;
-  background: #16171b;
-  border: 1px solid rgba(255, 236, 214, 0.06);
+  border-radius: calc(12px * var(--round));
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
 }
 
 /* ── Arabic: right to left ─────────────────────────────────────────────────────

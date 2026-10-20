@@ -8,7 +8,7 @@ import { installFakeDom } from "./fakedom.mjs";
 import { calls, sent } from "./tauri.mjs";
 
 const dom = installFakeDom();
-const { parseMarkdown, parseInline, renderMarkdown, safeWebUrl } = await import("../src/views/markdown.ts");
+const { fileTarget, parseMarkdown, parseInline, renderMarkdown, safeWebUrl } = await import("../src/views/markdown.ts");
 
 beforeEach(() => {
   calls.length = 0;
@@ -124,14 +124,54 @@ test("each block becomes its own element", () => {
   assert.equal(root.children.length, 1);
 });
 
-test("a web link opens through Rust; anything else is plain text", () => {
+test("a web link opens through Rust; a file link is shown by Rust; anything else is plain text", () => {
   const root = dom.root();
-  renderMarkdown(root, "See [the docs](https://example.com/docs) or [this](file:///etc/passwd).");
+  renderMarkdown(root, "See [the docs](https://example.com/docs), [the fix](src/main.ts#L12) or [this](javascript:alert(1)).", "C:\\p\\app");
   const links = root.find("A");
-  assert.equal(links.length, 1);
+  assert.equal(links.length, 2);
   assert.equal(links[0].getAttribute("href"), "https://example.com/docs");
   const event = links[0].fire("click");
   assert.equal(event.defaultPrevented, true);
   assert.deepEqual(sent("open_url"), [{ url: "https://example.com/docs" }]);
-  assert.match(root.textContent, /or this\.$/);
+  links[1].fire("click");
+  assert.deepEqual(sent("open_path"), [{ path: "src/main.ts", line: 12, base: "C:\\p\\app" }]);
+  assert.match(root.textContent, /or this\)\.$/);
+});
+
+test("a link names a file by its path, a file URL or a path with its line", () => {
+  assert.deepEqual(fileTarget("src/main.ts#L12-L20"), { path: "src/main.ts", line: 12 });
+  assert.deepEqual(fileTarget("src/main.ts:40:7"), { path: "src/main.ts", line: 40 });
+  assert.deepEqual(fileTarget("C:\\Users\\me\\notes.txt"), { path: "C:\\Users\\me\\notes.txt", line: null });
+  assert.deepEqual(fileTarget("file:///C:/My%20Projects/a.md"), { path: "C:/My Projects/a.md", line: null });
+  assert.deepEqual(fileTarget("README.md"), { path: "README.md", line: null });
+  for (const not of ["javascript:alert(1)", "mailto:a@b.c", "#anchor", "localhost:3000", "word"]) {
+    assert.equal(fileTarget(not), null, not);
+  }
+});
+
+test("written-out addresses and paths in code are links too", () => {
+  assert.deepEqual(parseInline("Filed https://jira.example.com/browse/FORT-12."), [
+    { kind: "text", text: "Filed " },
+    { kind: "link", url: "https://jira.example.com/browse/FORT-12", children: [{ kind: "text", text: "https://jira.example.com/browse/FORT-12" }] },
+    { kind: "text", text: "." },
+  ]);
+  assert.deepEqual(parseInline("(see https://example.com/a_(b))"), [
+    { kind: "text", text: "(see " },
+    { kind: "link", url: "https://example.com/a_(b)", children: [{ kind: "text", text: "https://example.com/a_(b)" }] },
+    { kind: "text", text: ")" },
+  ]);
+  assert.deepEqual(parseInline("Saved C:\\Users\\me\\Desktop\\clear.bat, done"), [
+    { kind: "text", text: "Saved " },
+    { kind: "link", url: null, file: { path: "C:\\Users\\me\\Desktop\\clear.bat", line: null }, children: [{ kind: "text", text: "C:\\Users\\me\\Desktop\\clear.bat" }] },
+    { kind: "text", text: ", done" },
+  ]);
+  assert.deepEqual(parseInline("`src/core/theme.ts:42`"), [{ kind: "code", text: "src/core/theme.ts:42", file: { path: "src/core/theme.ts", line: 42 } }]);
+  assert.deepEqual(parseInline("`C:\\My Projects\\notes`"), [{ kind: "code", text: "C:\\My Projects\\notes", file: { path: "C:\\My Projects\\notes", line: null } }]);
+  assert.deepEqual(parseInline("`https://localhost:5173`"), [{ kind: "code", text: "https://localhost:5173", url: "https://localhost:5173/" }]);
+  // Commands and bare names stay code.
+  assert.deepEqual(parseInline("`npm run build` and `theme.ts`"), [
+    { kind: "code", text: "npm run build" },
+    { kind: "text", text: " and " },
+    { kind: "code", text: "theme.ts" },
+  ]);
 });

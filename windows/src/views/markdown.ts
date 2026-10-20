@@ -4,8 +4,11 @@
 // links inside the text.
 //
 // Everything is built as DOM nodes with textContent, never as HTML, so nothing
-// a model writes can inject markup. Links open only when they are http(s), and
-// even then through Rust, which checks the scheme again.
+// a model writes can inject markup. A web link (http(s), as [text](url) or
+// written out) opens in the browser through Rust, which checks the scheme
+// again. A link to a file or folder ([text](path#L12), file:///…, C:\…, a
+// path in `code`) is opened by Rust too: a folder in File Explorer, a file in
+// VS Code — shown, never run.
 
 import { Bridge } from "../core/bridge";
 import { h, svg } from "./dom";
@@ -15,6 +18,7 @@ import { N_, t } from "../i18n/i18n";
 const STRINGS = {
   copy: N_("Copy"),
   copied: N_("Copied"),
+  missing: N_("That file was not found."),
 };
 
 export type Block =
@@ -101,13 +105,20 @@ export function parseMarkdown(input: string): Block[] {
 
 // ── Inline ────────────────────────────────────────────────────────────────────
 
+/** A file or folder a link points at; a relative path is from the conversation's project. */
+export interface FileTarget {
+  path: string;
+  line: number | null;
+}
+
 export type Inline =
   | { kind: "text"; text: string }
-  | { kind: "code"; text: string }
+  /** `url` / `file`: `code` that is a web address or a path, clickable too. */
+  | { kind: "code"; text: string; url?: string | null; file?: FileTarget | null }
   | { kind: "strong"; children: Inline[] }
   | { kind: "em"; children: Inline[] }
-  /** `url` is null when the target is not a web address: the text stays, the link goes. */
-  | { kind: "link"; url: string | null; children: Inline[] };
+  /** Neither `url` nor `file`: not something to open — the text stays, the link goes. */
+  | { kind: "link"; url: string | null; file?: FileTarget | null; children: Inline[] };
 
 /**
  * `code`, **bold**, __bold__, *italic*, _italic_ and [text](url), whichever
@@ -128,13 +139,101 @@ export function safeWebUrl(raw: string): string | null {
   }
 }
 
+/** `#L12`, `#L12-L20`, `:12`, `:12:5` at the end of a path. */
+const LINE_SUFFIX = /^(.*?)(?:#L(\d+)(?:-L?\d+)?|:(\d+)(?::\d+)?)$/;
+const ABSOLUTE = /^[A-Za-z]:[\\/]|^\\\\/;
+const EXTENSION = /\.[A-Za-z0-9]{1,8}$/;
+
+/**
+ * The file or folder a link target names: an absolute Windows path, a
+ * file:/// URL, or a relative path (with a folder or an extension in it),
+ * with its line if it says one. Null for anything else (another scheme, an
+ * anchor, a word).
+ */
+export function fileTarget(raw: string): FileTarget | null {
+  let s = raw.trim();
+  if (!s || s.startsWith("#")) return null;
+  if (/^file:/i.test(s)) {
+    s = s.replace(/^file:\/\//i, "");
+    if (/^\/[A-Za-z]:/.test(s)) s = s.slice(1);
+  }
+  else if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(s) && !ABSOLUTE.test(s)) return null;
+  try {
+    s = decodeURIComponent(s);
+  } catch {
+    /* as it is */
+  }
+  let line: number | null = null;
+  const m = LINE_SUFFIX.exec(s);
+  if (m && (m[2] || m[3])) {
+    s = m[1];
+    line = Number(m[2] ?? m[3]);
+  }
+  // No Windows path holds these (past the drive's colon).
+  if (!s || /[<>"|?*]/.test(s.slice(2))) return null;
+  const relative = /^\.{1,2}[\\/]/.test(s) || /[\\/]/.test(s) || EXTENSION.test(s);
+  return ABSOLUTE.test(s) || relative ? { path: s, line } : null;
+}
+
+/**
+ * `code` that names a file to open: an absolute path (spaces and all), or a
+ * relative one with a folder and an extension (`src/main.ts:12`). Not a bare
+ * name, nor a command (`npm run build`).
+ */
+function codeTarget(text: string): FileTarget | null {
+  const s = text.trim();
+  const absolute = ABSOLUTE.test(s);
+  if (!absolute && (/\s/.test(s) || !/[\\/]/.test(s))) return null;
+  const target = fileTarget(s);
+  if (!target || (!absolute && !EXTENSION.test(target.path))) return null;
+  return target;
+}
+
+/**
+ * Written-out addresses in plain text: web ones, and absolute Windows paths
+ * that end in a file name (where one with a space would be cut short, it
+ * isn't a file name and stays text).
+ */
+const BARE = /\bhttps?:\/\/[^\s<>"'`]+|\b[A-Za-z]:\\[^\s<>"'`|?*]+/g;
+
+/** The written-out address without the punctuation of the sentence around it. */
+function trimAddress(raw: string): string {
+  let s = raw.replace(/[.,;:!?'"]+$/, "");
+  // A closing bracket belongs to the address only if it opened one.
+  while (/[)\]}]$/.test(s)) {
+    const close = s[s.length - 1];
+    const open = close === ")" ? "(" : close === "]" ? "[" : "{";
+    if (s.split(open).length >= s.split(close).length) break;
+    s = s.slice(0, -1).replace(/[.,;:!?'"]+$/, "");
+  }
+  return s;
+}
+
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
-  const pushText = (t: string) => {
+  const addText = (t: string) => {
     if (!t) return;
     const last = out[out.length - 1];
     if (last?.kind === "text") last.text += t;
     else out.push({ kind: "text", text: t });
+  };
+  /** Plain text, with what is written out as an address made a link. */
+  const pushText = (t: string) => {
+    const bare = new RegExp(BARE.source, "g");
+    let from = 0;
+    let b: RegExpExecArray | null;
+    while ((b = bare.exec(t))) {
+      const address = trimAddress(b[0]);
+      const web = /^https?:/i.test(address) ? safeWebUrl(address) : null;
+      const file = web ? null : EXTENSION.test(address) ? fileTarget(address) : null;
+      if (!web && !file) continue;
+      addText(t.slice(from, b.index));
+      const children: Inline[] = [{ kind: "text", text: address }];
+      out.push(web ? { kind: "link", url: web, children } : { kind: "link", url: null, file, children });
+      from = b.index + address.length;
+      bare.lastIndex = from;
+    }
+    addText(t.slice(from));
   };
   const re = new RegExp(INLINE.source, "g");
   let at = 0;
@@ -147,13 +246,41 @@ export function parseInline(text: string): Inline[] {
     }
     pushText(text.slice(at, m.index));
     at = m.index + m[0].length;
-    if (m[1] != null) out.push({ kind: "code", text: m[1] });
-    else if (m[6] != null) out.push({ kind: "link", url: safeWebUrl(m[7]), children: parseInline(m[6]) });
+    if (m[1] != null) {
+      const url = safeWebUrl(m[1]);
+      const file = url ? null : codeTarget(m[1]);
+      out.push(url ? { kind: "code", text: m[1], url } : file ? { kind: "code", text: m[1], file } : { kind: "code", text: m[1] });
+    } else if (m[6] != null) {
+      const url = safeWebUrl(m[7]);
+      const file = url ? null : fileTarget(m[7]);
+      const children = parseInline(m[6]);
+      out.push(file ? { kind: "link", url, file, children } : { kind: "link", url, children });
+    }
     else if (m[2] != null || m[3] != null) out.push({ kind: "strong", children: parseInline(m[2] ?? m[3]) });
     else out.push({ kind: "em", children: parseInline(m[4] ?? m[5]) });
   }
   pushText(text.slice(at));
   return out;
+}
+
+/** The conversation's project, while an answer of it is drawn: where relative paths start. */
+let drawingBase: string | null = null;
+
+/** A click on `el` opens `url` in the browser, or `file` through Rust. */
+function opens(el: HTMLElement, url: string | null | undefined, file: FileTarget | null | undefined) {
+  const base = drawingBase;
+  el.title = url ?? file?.path ?? "";
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (url) {
+      void Bridge.openUrl(url);
+    } else if (file) {
+      Bridge.openPath(file.path, file.line, base).catch(() => {
+        el.classList.add("md-missing");
+        el.title = t(STRINGS.missing);
+      });
+    }
+  });
 }
 
 function appendInline(into: HTMLElement, nodes: Inline[]) {
@@ -162,9 +289,12 @@ function appendInline(into: HTMLElement, nodes: Inline[]) {
       case "text":
         into.append(document.createTextNode(node.text));
         break;
-      case "code":
-        into.append(h("code", { class: "md-code", text: node.text }));
+      case "code": {
+        const code = h("code", { class: node.url || node.file ? "md-code md-open" : "md-code", text: node.text });
+        if (node.url || node.file) opens(code, node.url, node.file);
+        into.append(code);
         break;
+      }
       case "strong":
       case "em": {
         const el = h(node.kind === "strong" ? "strong" : "em");
@@ -173,16 +303,12 @@ function appendInline(into: HTMLElement, nodes: Inline[]) {
         break;
       }
       case "link": {
-        if (!node.url) {
+        if (!node.url && !node.file) {
           appendInline(into, node.children);
           break;
         }
-        const url = node.url;
-        const a = h("a", { class: "md-link", href: url, title: url });
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          void Bridge.openUrl(url);
-        });
+        const a = h("a", { class: "md-link", href: node.url ?? "#" });
+        opens(a, node.url, node.file);
         appendInline(a, node.children);
         into.append(a);
         break;
@@ -261,6 +387,12 @@ function render(block: Block): HTMLElement {
 }
 
 /** Replaces what `into` shows with the Markdown rendered. */
-export function renderMarkdown(into: HTMLElement, markdown: string) {
-  into.replaceChildren(...parseMarkdown(markdown).map(render));
+/** `base`: the conversation's project folder, where a relative path in the answer starts. */
+export function renderMarkdown(into: HTMLElement, markdown: string, base: string | null = null) {
+  drawingBase = base;
+  try {
+    into.replaceChildren(...parseMarkdown(markdown).map(render));
+  } finally {
+    drawingBase = null;
+  }
 }

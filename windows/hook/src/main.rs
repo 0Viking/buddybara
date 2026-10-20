@@ -40,8 +40,10 @@ const FIRE_AND_FORGET_BUDGET: Duration = Duration::from_secs(2);
 const DECISION_BUDGET: Duration = Duration::from_secs(110);
 
 /// Fields that are pointless to forward and can be enormous (a whole file read,
-/// a full command output). The island never shows them.
-const DROPPED_FIELDS: &[&str] = &["tool_response", "tool_output", "transcript_path"];
+/// a full command output). The island never shows them. `transcript_path` is
+/// kept: where the transcript is stored is the session's project, whatever
+/// folder it has `cd`'d into since (the app's code.rs anchor_cwd).
+const DROPPED_FIELDS: &[&str] = &["tool_response", "tool_output"];
 /// Longest string forwarded for any single field; the island truncates to far
 /// less than this anyway.
 const MAX_FIELD_LEN: usize = 2_000;
@@ -422,6 +424,17 @@ mod tests {
         assert!(v.get("buddybara_agent").is_none());
         assert_eq!(v["cwd"], "/p");
         assert_eq!(v["tool_name"], "Bash");
+    }
+
+    #[test]
+    fn the_transcript_path_goes_through_for_the_app_to_find_the_project() {
+        let (v, _) = run(
+            r#"{"hook_event_name":"Stop","cwd":"/p/app/src","transcript_path":"/h/.claude/projects/-p-app/s.jsonl","tool_response":"big"}"#,
+            "",
+            "Stop",
+        );
+        assert_eq!(v["transcript_path"], "/h/.claude/projects/-p-app/s.jsonl");
+        assert!(v.get("tool_response").is_none());
     }
 
     #[test]

@@ -26,6 +26,10 @@ pub struct Settings {
     /// Left out of the file until it is set (no `"projectsRoot": null` noise).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projects_root: Option<String>,
+    /// The Projects list also shows every other folder Claude Code has
+    /// sessions for (VS Code's projects, a terminal's), not only the projects
+    /// folder's (code.rs session_folders). On unless turned off in Settings.
+    pub all_session_folders: bool,
     pub autostart: bool,
     pub hooks_installed: bool,
     /// The Claude plan's usage shows on the mikan. Off until the user turns it on.
@@ -41,6 +45,20 @@ pub struct Settings {
     /// ("fr", "pt-BR", "zh-Hans"…). Kept as it comes: a code this build doesn't
     /// know reads as "".
     pub language: String,
+    /// Settings → Customization: the scheme of the panel and Settings
+    /// (core/theme.ts SCHEMES), and what of it the user changed: colours by
+    /// name ("bg", "ink"…), "font", "corners", "lines". Kept as they come:
+    /// the page ignores what it doesn't know.
+    pub theme: String,
+    pub theme_custom: BTreeMap<String, String>,
+    /// Settings → Customization: the text size of the panel and Settings, in
+    /// percent of the usual (core/theme.ts TEXT_SIZES). Kept as it comes: the
+    /// pages read another number as the nearest size they have.
+    pub text_size: u32,
+    /// Settings → Customization: how big the desktop Buddybara is, in percent
+    /// of his usual size, one of desktop::logic::SIZES (50 to 200). Another
+    /// number reads as the nearest of them.
+    pub buddy_size: u32,
     /// The model picked for each other chat provider in Settings → AI models,
     /// by provider id ("openai", "ollama"…).
     pub chat_models: BTreeMap<String, String>,
@@ -79,12 +97,17 @@ impl Default for Settings {
             main_pill: "integration_claude".into(),
             screen: "primary".into(),
             projects_root: None,
+            all_session_folders: true,
             autostart: false,
             hooks_installed: false,
             show_plan_in_notch: false,
             plan_relay_installed: false,
             pill_colors: BTreeMap::new(),
             language: String::new(),
+            theme: "buddybara".into(),
+            theme_custom: BTreeMap::new(),
+            text_size: 100,
+            buddy_size: 100,
             chat_models: BTreeMap::new(),
             ollama_url: String::new(),
             lmstudio_url: String::new(),
@@ -348,12 +371,17 @@ mod tests {
   "activeIntegrations": ["integration_notion"],
   "mainPill": "agent_cursor",
   "screen": "cursor",
+  "allSessionFolders": false,
   "autostart": true,
   "hooksInstalled": true,
   "showPlanInNotch": true,
   "planRelayInstalled": true,
   "pillColors": { "integration_claude": "#2DD4BF" },
   "language": "pt-BR",
+  "theme": "nord",
+  "themeCustom": { "bg": "#101010", "font": "mono" },
+  "textSize": 130,
+  "buddySize": 160,
   "chatModels": { "ollama": "llama3.2" },
   "ollamaUrl": "http://127.0.0.1:11434",
   "lmstudioUrl": "http://127.0.0.1:1234",
@@ -501,6 +529,8 @@ mod tests {
             ("activeIntegrations", json!("integration_n8n")),
             ("mainPill", json!(["agent_cursor"])),
             ("screen", Value::Null),
+            ("textSize", json!("big")),
+            ("buddySize", json!(-80)),
         ] {
             let loaded = parse(&custom_with(key, Some(wrong)))
                 .unwrap_or_else(|| panic!("a file with a bad {key} was thrown away"));
@@ -715,12 +745,17 @@ mod tests {
                 "activeIntegrations",
                 "mainPill",
                 "screen",
+                "allSessionFolders",
                 "autostart",
                 "hooksInstalled",
                 "showPlanInNotch",
                 "planRelayInstalled",
                 "pillColors",
                 "language",
+                "theme",
+                "themeCustom",
+                "textSize",
+                "buddySize",
                 "chatModels",
                 "ollamaUrl",
                 "lmstudioUrl",

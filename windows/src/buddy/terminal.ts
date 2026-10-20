@@ -9,8 +9,12 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import { Bridge, onEvent } from "../core/bridge";
+import { THEME_EVENT, textScale, themeColor } from "../core/theme";
 import { t } from "../i18n/i18n";
 import { h } from "../views/dom";
+
+/** Its text at the usual size; Settings → Customization's text size scales it. */
+const TERMINAL_FONT_PX = 12;
 
 /** Where it runs: a project folder, and the session it resumes (null: a new one). */
 export interface TermTarget {
@@ -122,19 +126,23 @@ export class BuddyTerminal {
     if (this.xterm) return this.xterm;
     const term = new Terminal({
       fontFamily: '"Cascadia Mono", Consolas, ui-monospace, monospace',
-      fontSize: 12,
+      fontSize: TERMINAL_FONT_PX * textScale(),
       lineHeight: 1.15,
       cursorBlink: true,
       scrollback: 5000,
       allowTransparency: true,
       // ConPTY redraws lines itself: xterm.js mustn't reflow them twice.
       windowsPty: { backend: "conpty" },
-      theme: {
-        background: "#15110e",
-        foreground: "#e8ddd1",
-        cursor: "#ff8a3d",
-        selectionBackground: "rgba(255, 138, 61, 0.35)",
-      },
+      theme: terminalTheme(),
+    });
+    // Another scheme or text size in Settings: the terminal takes it at once.
+    window.addEventListener(THEME_EVENT, () => {
+      term.options.theme = terminalTheme();
+      const px = TERMINAL_FONT_PX * textScale();
+      if (term.options.fontSize !== px) {
+        term.options.fontSize = px;
+        this.refit();
+      }
     });
     term.loadAddon(this.fit);
     // A sign-in prints its link: a click opens it in the browser.
@@ -162,6 +170,17 @@ export class BuddyTerminal {
     this.xterm = term;
     return term;
   }
+}
+
+/** The panel's colours for xterm.js, which draws them itself. */
+function terminalTheme() {
+  const accent = themeColor("mikan");
+  return {
+    background: themeColor("bg"),
+    foreground: themeColor("code"),
+    cursor: accent,
+    selectionBackground: `${accent}59`,
+  };
 }
 
 function same(a: TermTarget, b: TermTarget): boolean {

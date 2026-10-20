@@ -73,6 +73,8 @@ export interface Settings {
   mainPill: string;
   /** "primary", "cursor", or `at:<x>,<y>` for one display (logical origin). */
   screen: string;
+  /** The Projects list also shows every other folder Claude Code has sessions for. */
+  allSessionFolders: boolean;
   autostart: boolean;
   /** The plan usage shows on the mikan. */
   showPlanInNotch: boolean;
@@ -85,6 +87,13 @@ export interface Settings {
    * else English), or one of src/i18n's ten codes ("fr", "pt-BR", "zh-Hans"…).
    */
   language: string;
+  /** Settings → Customization: the scheme (core/theme.ts SCHEMES) and what of it the user changed (colours, font, corners, lines). */
+  theme: string;
+  themeCustom: Record<string, string>;
+  /** Settings → Customization: the text size of the panel and Settings, in percent (one of core/theme.ts TEXT_SIZES). */
+  textSize: number;
+  /** Settings → Customization: the desktop Buddybara's size, in percent (one of desktop-logic.ts BUDDY_SIZES). */
+  buddySize: number;
   /** The model picked for each other chat provider (Settings → AI models), by provider id. */
   chatModels: Record<string, string>;
   /** The model servers' addresses, "" until connected (local_chat.rs). */
@@ -99,11 +108,16 @@ export const DEFAULT_SETTINGS: Settings = {
   activeIntegrations: [],
   mainPill: DEFAULT_MAIN_PILL,
   screen: "primary",
+  allSessionFolders: true,
   autostart: false,
   showPlanInNotch: false,
   planRelayInstalled: false,
   pillColors: {},
   language: "",
+  theme: "buddybara",
+  themeCustom: {},
+  textSize: 100,
+  buddySize: 100,
   chatModels: {},
   ollamaUrl: "",
   lmstudioUrl: "",

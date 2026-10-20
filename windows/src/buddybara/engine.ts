@@ -76,6 +76,9 @@ const EYE = { x: 0.5, y: -0.32, w: 0.22, h: 0.27 };
 const SNOUT = { y: 0.34, rx: 0.7, ry: 0.43, n: 3 };
 const MIKAN = { y: -1.12, r: 0.48 };
 const PAW = { x: 0.42, y: 0.86, rx: 0.17, ry: 0.11 };
+/** A picture in the capybara's place (`skin`) fits in this box, in R: about his
+ *  height from the top of the mikan to the paws, and a little wider than him. */
+const SKIN = { h: 2.55, w: 2.9 };
 /** Pores on the mikan's peel, in units of its radius. */
 const PORES: readonly (readonly [number, number])[] = [
   [0.3, -0.1], [-0.1, 0.35], [0.42, 0.38], [-0.45, 0.15], [0.1, -0.55], [0.55, -0.25],
@@ -104,6 +107,8 @@ const EAR_POSE: Partial<Record<BotStateName, number>> = {
 };
 /** States calm enough for the eyes to wander when the pointer rests. */
 const GLANCES = new Set<BotStateName>(["idle", "working", "finished"]);
+/** States in which a picture bobs along, as if hopping while it works. */
+const BOBS = new Set<BotStateName>(["working", "searching"]);
 
 const C = {
   idle: [0.902, 0.914, 0.933] as RGB,
@@ -270,6 +275,11 @@ export class BotEngine {
   /** The Claude plan's usage, shown on the mikan (null hides it), and its gauge colour. */
   usagePct: number | null = null;
   usageColor = "#22C55E";
+  /** A picture of the user's own in the capybara's place (Settings → Customization): it
+   *  moves as he does, under the usage gauge and the badge. Null draws the capybara. */
+  skin: ImageBitmap | null = null;
+  /** A picture has no ears or nose to keep it alive: now and then, it fidgets. */
+  private nextFidget = now() + 6 + Math.random() * 6;
   private nextEarFlick = now() + 2 + Math.random() * 3;
   private sniffStart = 0;
   private sniffUntil = 0;
@@ -343,16 +353,17 @@ export class BotEngine {
     this.anim("open", [[0.06, 70, Ease.inOut], [1, 130, Ease.out]]);
   }
 
-  squash() {
-    this.physVy += 0.6;
-    this.anim("sy", [[0.78, 70, Ease.out], [1.1, 130, Ease.out], [1, 170, Ease.inOut]]);
-    this.anim("sx", [[1.16, 70, Ease.out], [0.95, 130, Ease.out], [1, 170, Ease.inOut]]);
+  /** A landing's squash; `k` scales it (a whole picture squashes by half: all of him is the body). */
+  squash(k = 1) {
+    this.physVy += 0.6 * k;
+    this.anim("sy", [[1 - 0.22 * k, 70, Ease.out], [1 + 0.1 * k, 130, Ease.out], [1, 170, Ease.inOut]]);
+    this.anim("sx", [[1 + 0.16 * k, 70, Ease.out], [1 - 0.05 * k, 130, Ease.out], [1, 170, Ease.inOut]]);
   }
 
   /** Work done: a hop, and the mikan flies up, turns once and lands back. */
   tossMikan() {
     this.anim("oy", [[-0.16, 160, Ease.out], [0, 320, Ease.back]]);
-    this.anim("mikanY", [[-0.4, 300, Ease.out], [0, 320, Ease.easeIn]], () => this.squash());
+    this.anim("mikanY", [[-0.4, 300, Ease.out], [0, 320, Ease.easeIn]], () => this.squash(this.skin ? 0.5 : 1));
     this.anim("mikanSpin", [[Math.PI * 2, 620, Ease.inOut]], () => { this.mikanSpin = 0; });
   }
 
@@ -523,14 +534,23 @@ export class BotEngine {
       const wt = n - this.waveStart;
       this.tgTilt = -0.06 + Math.sin(2 * Math.PI * 1.2 * wt) * 0.07;
     }
+    // A picture thinks swaying from side to side.
+    if (this.skin && this.state === "thinking") this.tgTilt += Math.sin(t * 1.3) * 0.05;
 
-    const bounce = this.cfg.bounces ? -Math.abs(Math.sin(t * 5.2)) * 0.07 : 0;
+    let bounce = this.cfg.bounces ? -Math.abs(Math.sin(t * 5.2)) * 0.07 : 0;
+    const bobbing = this.skin != null && BOBS.has(this.state);
+    if (bobbing) bounce = -Math.abs(Math.sin(t * 4.2)) * 0.06;
     const kGen = 1 - Math.pow(0.0008, dt);
     if (!this.locks.has("oy")) this.oy += (bounce - this.oy) * kGen;
 
     if (this.cfg.breathes) {
       this.tgSy = 1 + Math.sin(t * 1.8) * 0.035;
       this.tgSx = 1 - Math.sin(t * 1.8) * 0.02;
+    } else if (bobbing) {
+      // Each bob lands with a little squash.
+      const contact = (1 - Math.abs(Math.sin(t * 4.2))) ** 6;
+      this.tgSy = 1 - 0.05 * contact;
+      this.tgSx = 1 + 0.03 * contact;
     } else {
       this.tgSy = 1;
       this.tgSx = 1;
@@ -595,8 +615,28 @@ export class BotEngine {
     this.lastTime = n;
   }
 
+  /**
+   * A picture's idle fidget: a little hop, a wiggle or a stretch — `kind` 0,
+   * 1 or 2 (Settings' preview of them), or one at random.
+   */
+  fidget(kind?: number) {
+    const pick = kind == null ? Math.random() : [0, 0.5, 0.9][kind] ?? 0;
+    if (pick < 0.4) {
+      this.anim("oy", [[-0.08, 150, Ease.out], [0, 260, Ease.back]], () => this.squash(0.45));
+    } else if (pick < 0.75) {
+      this.anim("tilt", [[0.07, 140, Ease.inOut], [-0.06, 180, Ease.inOut], [0, 160, Ease.out]]);
+    } else {
+      this.anim("sy", [[1.06, 380, Ease.inOut], [1, 420, Ease.inOut]]);
+      this.anim("sx", [[0.96, 380, Ease.inOut], [1, 420, Ease.inOut]]);
+    }
+  }
+
   /** Ears, sniffing, chewing and glances: what keeps a resting capybara alive. */
   private updateLife(n: number, t: number, dt: number, kGen: number) {
+    if (this.skin && n > this.nextFidget) {
+      if (this.state === "idle") this.fidget();
+      this.nextFidget = n + 6 + Math.random() * 8;
+    }
     const earTarget = this.state === "dizzy" ? Math.sin(t * 7) * 0.45 : EAR_POSE[this.state] ?? 0;
     this.earPose += (earTarget - this.earPose) * kGen;
 
@@ -674,25 +714,32 @@ export class BotEngine {
     x.translate(cx, cy);
     // A roll (dizzy) turns the whole figure, mikan and all.
     if (this.roll !== 0) x.rotate(this.roll);
-    if (this.tilt !== 0) x.rotate(this.tilt);
-    x.scale(this.sx, this.sy);
 
-    const face = this.face(R);
-    this.drawEars(x, R, face);
-    const head = superellipse(HEAD_RX * R, HEAD_RY * R, HEAD_N);
-    this.drawHead(x, head, R);
-    x.save();
-    x.clip(head);
-    this.drawCheeks(x, R, face);
-    this.drawSnout(x, R, face);
-    this.drawEyes(x, R, face);
-    x.restore();
-    this.drawPaws(x, R);
-    this.drawMikan(x, R);
+    // The badge sits at the figure's top left: the capybara's ear, or the picture's corner.
+    let badgeAt: [number, number];
+    if (this.skin) {
+      badgeAt = this.drawSkin(x, R, this.skin);
+    } else {
+      if (this.tilt !== 0) x.rotate(this.tilt);
+      x.scale(this.sx, this.sy);
+      badgeAt = [-R * 0.98 * this.sx, -R * 1.02 * this.sy];
+      const face = this.face(R);
+      this.drawEars(x, R, face);
+      const head = superellipse(HEAD_RX * R, HEAD_RY * R, HEAD_N);
+      this.drawHead(x, head, R);
+      x.save();
+      x.clip(head);
+      this.drawCheeks(x, R, face);
+      this.drawSnout(x, R, face);
+      this.drawEyes(x, R, face);
+      x.restore();
+      this.drawPaws(x, R);
+      this.drawMikan(x, R);
+    }
     x.restore();
 
     if (this.badge && this.badgeS > 0.01) {
-      this.drawBadge(x, this.badge, R, cx - R * 0.98 * this.sx, cy - R * 1.02 * this.sy);
+      this.drawBadge(x, this.badge, R, cx + badgeAt[0], cy + badgeAt[1]);
     }
     this.drawParticles(x, R, cx, cy);
   }
@@ -1001,6 +1048,96 @@ export class BotEngine {
       }
       x.restore();
     }
+  }
+
+  /**
+   * The user's picture where the capybara stands, about its height, posed
+   * about its feet, and the plan's usage at its top, where the mikan would be.
+   * Returns where the badge goes (its top left corner, as posed).
+   */
+  private drawSkin(x: CanvasRenderingContext2D, R: number, pic: ImageBitmap): [number, number] {
+    const k = Math.min((SKIN.h * R) / pic.height, (SKIN.w * R) / pic.width);
+    const w = pic.width * k;
+    const h = pic.height * k;
+    const left = -w / 2;
+    const feet = (PAW.y + PAW.ry) * R;
+    const top = feet - h;
+    const pose = this.skinPose();
+    // A point of the picture where the pose takes it.
+    const posed = (px: number, py: number): [number, number] => {
+      const dy = (py - feet) * pose.sy;
+      const dx = px * pose.sx + pose.skew * dy;
+      const c = Math.cos(pose.lean);
+      const s = Math.sin(pose.lean);
+      return [dx * c - dy * s, feet + dx * s + dy * c];
+    };
+
+    x.save();
+    x.translate(0, feet);
+    x.rotate(pose.lean);
+    x.transform(1, 0, pose.skew, 1, 0, 0);
+    x.scale(pose.sx, pose.sy);
+    x.translate(0, -feet);
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = "high";
+    x.drawImage(pic, left, top, w, h);
+    x.restore();
+
+    const pct = this.usagePct == null ? null : Math.max(0, Math.min(100, Math.round(this.usagePct)));
+    if (pct != null) {
+      // Carried by the picture, but never squashed: it is something to read.
+      const [gx, gy] = posed(0, top + R * 0.1);
+      x.save();
+      x.translate(gx, gy);
+      x.rotate(pose.lean);
+      this.drawGauge(x, R, 0, 0, pct);
+      x.restore();
+    }
+    return posed(left + R * 0.15, top + R * 0.45);
+  }
+
+  /**
+   * A picture has no head to turn: it leans toward the pointer and tilts as
+   * he would, breathes even awake, and wobbles like jelly after a hop or a
+   * turn (the mikan's spring). All about its feet, which stay put.
+   */
+  private skinPose() {
+    const t = now() - this.t0;
+    // Asleep, `breathes` already does it, deeper.
+    const breath = this.cfg.breathes ? 0 : Math.sin(t * 2.1) * 0.012;
+    return {
+      lean: this.tilt + this.yaw * 0.08,
+      skew: -this.physDx * 0.06,
+      sx: this.sx * (1 - breath * 0.6 + this.physDy * 0.025),
+      sy: this.sy * (1 + breath - this.physDy * 0.04 + this.pitch * 0.08),
+    };
+  }
+
+  /** The plan's usage on its own, for a picture: a dark disc, the ring and the number. */
+  private drawGauge(x: CanvasRenderingContext2D, R: number, gx: number, gy: number, pct: number) {
+    const r = R * 0.36;
+    x.beginPath();
+    x.arc(gx, gy, r, 0, Math.PI * 2);
+    x.fillStyle = "rgba(24,18,14,0.88)";
+    x.fill();
+    x.lineWidth = R * 0.07;
+    x.lineCap = "round";
+    x.strokeStyle = "rgba(255,255,255,0.18)";
+    x.beginPath();
+    x.arc(gx, gy, r, 0, Math.PI * 2);
+    x.stroke();
+    if (pct > 0) {
+      x.strokeStyle = this.usageColor;
+      x.beginPath();
+      x.arc(gx, gy, r, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * pct) / 100);
+      x.stroke();
+    }
+    const label = `${pct}%`;
+    x.font = `800 ${r * (label.length > 3 ? 0.62 : 0.78)}px ${FONT}`;
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    x.fillStyle = "#fff";
+    x.fillText(label, gx, gy + r * 0.06);
   }
 
   /** The mikan on its head: it lags behind moves on a spring, its leaf flutters, and it flies when tossed. */

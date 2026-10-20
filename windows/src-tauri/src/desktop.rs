@@ -28,7 +28,9 @@ use crate::settings::{self, DesktopSpot};
 
 pub const LABEL: &str = "buddybara";
 
-/// Side of the square window, logical pixels (DesktopBuddybaraLogic.panelSize).
+/// Side of the square window at his usual size (100 %), logical pixels
+/// (DesktopBuddybaraLogic.panelSize). Settings → Customization scales it
+/// (`logic::side_for`).
 pub const SIZE: f64 = 120.0;
 /// Kept between him and the edges of the work area (DesktopBuddybaraLogic.clampMargin).
 const MARGIN: f64 = 24.0;
@@ -83,17 +85,33 @@ pub mod logic {
     /// corners of his window: where a file dragged onto him is taken.
     pub const FIGURE_RADIUS_FRACTION: f64 = 0.42;
 
+    /// The sizes Settings → Customization offers, in percent of `SIZE`: three
+    /// smaller, his own, three bigger (src/buddybara/desktop-logic.ts BUDDY_SIZES).
+    pub const SIZES: [u32; 7] = [50, 65, 80, 100, 125, 160, 200];
+
+    /// Side of his window for a size in percent, logical pixels: the nearest
+    /// of `SIZES`, so a hand-edited settings.json can't make him 3 px or 3000.
+    pub fn side_for(percent: u32) -> f64 {
+        let nearest = SIZES.iter().copied().min_by_key(|s| s.abs_diff(percent)).unwrap_or(100);
+        super::SIZE * nearest as f64 / 100.0
+    }
+
     /// Hit test of the round body inside the square window (window-local).
     pub fn is_over_body(local: (f64, f64), size: f64) -> bool {
         is_within(local, size, BODY_RADIUS_FRACTION)
     }
 
-    /// His minimize button, top-right of his head (buddybara.html
-    /// #hide), centre and radius in window pixels — a little over its size.
-    pub const HIDE_BUTTON: (f64, f64, f64) = (94.0, 28.0, 11.0);
+    /// His minimize button, top-right of his head (buddybara.html #hide), in
+    /// a window of side `size`: centre and radius in window pixels, a little
+    /// over the button. It goes where his head goes, and grows less than he
+    /// does (src/buddybara/desktop-logic.ts hideButton).
+    pub fn hide_button(size: f64) -> (f64, f64, f64) {
+        let k = size / super::SIZE;
+        (94.0 * k, 28.0 * k, 11.0 * k.clamp(0.8, 1.3))
+    }
 
-    pub fn is_over_hide_button(local: (f64, f64)) -> bool {
-        let (cx, cy, r) = HIDE_BUTTON;
+    pub fn is_over_hide_button(local: (f64, f64), size: f64) -> bool {
+        let (cx, cy, r) = hide_button(size);
         let (dx, dy) = (local.0 - cx, local.1 - cy);
         dx * dx + dy * dy <= r * r
     }
@@ -220,6 +238,9 @@ struct Inner {
     display: Option<(f64, f64)>,
     /// Poll mode: the click-through state last applied.
     ignoring: Option<bool>,
+    /// Side of his window, logical pixels (`logic::side_for` of the size in
+    /// Settings → Customization).
+    side: f64,
 }
 
 pub struct Desktop {
@@ -233,14 +254,18 @@ pub struct Desktop {
 }
 
 impl Desktop {
-    fn new(mode: DesktopMode) -> Self {
+    fn new(mode: DesktopMode, side: f64) -> Self {
         Self {
             mode,
             failed: AtomicBool::new(false),
             gate: PollGate::new(),
-            inner: Mutex::new(Inner::default()),
+            inner: Mutex::new(Inner { side, ..Inner::default() }),
             flight: AtomicU64::new(0),
         }
+    }
+
+    fn side(&self) -> f64 {
+        self.inner.lock().unwrap().side
     }
 }
 
@@ -260,6 +285,8 @@ pub struct DesktopInfo {
     /// His window is on screen now: a page that loaded after `desktop-visible`
     /// was sent (a buddy flies out at once) still learns it must draw.
     shown: bool,
+    /// Side of his window, logical pixels: what his page draws him in.
+    side: f64,
 }
 
 pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
@@ -278,8 +305,13 @@ pub fn shown_rect(app: &AppHandle) -> Option<(f64, f64, f64, f64)> {
     Some((p.x as f64, p.y as f64, s.width as f64, s.height as f64))
 }
 
-fn body_disc() -> MouseShape {
-    MouseShape::Disc { cx: SIZE / 2.0, cy: SIZE / 2.0, r: SIZE * logic::BODY_RADIUS_FRACTION }
+/// Side of his window now, logical pixels: the panel opens beside it.
+pub fn side(app: &AppHandle) -> f64 {
+    app.try_state::<Arc<Desktop>>().map_or(SIZE, |d| d.side())
+}
+
+fn body_disc(side: f64) -> MouseShape {
+    MouseShape::Disc { cx: side / 2.0, cy: side / 2.0, r: side * logic::BODY_RADIUS_FRACTION }
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -289,15 +321,17 @@ fn body_disc() -> MouseShape {
 /// feature is off.
 pub fn setup(app: &AppHandle) {
     let planned = platform::desktop_mode();
+    let percent = app.try_state::<crate::Shared>().map_or(100, |s| s.settings.lock().unwrap().buddy_size);
+    let side = logic::side_for(percent);
     // Managed before his window is made. Making a window runs the message
     // loop, and the panel page's first calls are answered meanwhile: a
     // desktop_buddybara_info that found no state yet failed, and the page went
     // the whole session without him (a buddy never came out at all).
-    let desktop = Arc::new(Desktop::new(planned));
+    let desktop = Arc::new(Desktop::new(planned, side));
     app.manage(desktop.clone());
     let mut mode = planned;
     if mode != DesktopMode::Off {
-        match create_window(app, mode) {
+        match create_window(app, mode, side) {
             Some(win) if platform::prepare_desktop_window(&win, mode) => {}
             Some(win) => {
                 let _ = win.destroy();
@@ -325,11 +359,11 @@ fn page_url(app: &AppHandle) -> WebviewUrl {
     WebviewUrl::App("buddybara.html".into())
 }
 
-fn create_window(app: &AppHandle, _mode: DesktopMode) -> Option<WebviewWindow> {
+fn create_window(app: &AppHandle, _mode: DesktopMode, side: f64) -> Option<WebviewWindow> {
     let mut builder = WebviewWindowBuilder::new(app, LABEL, page_url(app))
         .additional_browser_args(crate::BROWSER_ARGS)
         .title("Buddybara")
-        .inner_size(SIZE, SIZE)
+        .inner_size(side, side)
         // GTK won't size a non-resizable window below its natural size (see
         // island::apply_geometry). Windows would grow resize borders instead.
         .resizable(cfg!(target_os = "linux"))
@@ -492,7 +526,7 @@ fn refresh(app: &AppHandle, d: &Desktop) {
         } else if i.overlay {
             MouseShape::Whole
         } else {
-            body_disc()
+            body_disc(i.side)
         };
         (active, ignore, shape)
     };
@@ -562,16 +596,17 @@ fn remember_spot(app: &AppHandle, d: &Desktop, pos: (f64, f64), on_desktop: bool
 /// with the desktop shortcut: then the first-visit corner.
 fn target_spot(app: &AppHandle, d: &Desktop, anywhere: bool) -> Option<(f64, f64)> {
     let all = displays(app, d);
+    let side = d.side();
     let saved = app.try_state::<crate::Shared>().and_then(|s| s.settings.lock().unwrap().desktop_buddybara.spot.clone());
     // A fresh start in the corner of the panel's display.
     let corner = || {
         let (cx, top, _) = panel_anchor(app, d)?;
         let home = logic::display_near((cx, top + 1.0), &all)?;
-        Some(logic::default_spot(&home, SIZE, MARGIN))
+        Some(logic::default_spot(&home, side, MARGIN))
     };
     match saved {
         Some(spot) if spot.space == d.mode.space() => {
-            let restored = logic::restore_spot((spot.x, spot.y), &all, SIZE, MARGIN);
+            let restored = logic::restore_spot((spot.x, spot.y), &all, side, MARGIN);
             if anywhere { restored.or_else(corner) } else { restored }
         }
         // Never placed, or placed under another kind of session.
@@ -586,7 +621,7 @@ async fn finish_drop(app: &AppHandle, d: &Desktop, pos: (f64, f64)) {
         i.carry = None;
         i.landed = true;
     }
-    let spot = logic::settle(pos, &displays(app, d), SIZE, MARGIN);
+    let spot = logic::settle(pos, &displays(app, d), d.side(), MARGIN);
     refresh(app, d);
     if spot != pos {
         fly(app, d, spot, SNAP_MS, logic::ease_out_back).await;
@@ -594,6 +629,39 @@ async fn finish_drop(app: &AppHandle, d: &Desktop, pos: (f64, f64)) {
     remember_spot(app, d, spot, true);
     // The panel opens beside his new spot now.
     let _ = app.emit_to(island::WINDOW_LABEL, "desktop-buddybara-dropped", ());
+}
+
+/// Settings → Customization changed his size. His window takes the new side
+/// with his feet where they were (its bottom centre stays put), pulled back
+/// inside the work area if that took him out of it; his page draws him at
+/// it, and an open panel moves to stay beside him.
+pub fn resize(app: &AppHandle, percent: u32) {
+    let Some(d) = app.try_state::<Arc<Desktop>>().map(|d| d.inner().clone()) else { return };
+    let Some(win) = window(app) else { return };
+    let side = logic::side_for(percent);
+    let (old, pos, settled) = {
+        let mut i = d.inner.lock().unwrap();
+        if (i.side - side).abs() < 0.5 {
+            return;
+        }
+        let old = std::mem::replace(&mut i.side, side);
+        (old, i.pos, i.shown && i.landed && i.carry.is_none())
+    };
+    let _ = win.set_size(tauri::LogicalSize::new(side, side));
+    // Flying out or carried, he lands where that takes him, at the new size.
+    if settled {
+        // A snap still settling him after a drop gives way.
+        d.flight.fetch_add(1, Ordering::SeqCst);
+        // Layer mode places him in logical pixels, the others in physical ones.
+        let k = if d.mode == DesktopMode::Layer { 1.0 } else { win.scale_factor().unwrap_or(1.0) };
+        let grown = (side - old) * k;
+        let spot = logic::settle((pos.0 - grown / 2.0, pos.1 - grown), &displays(app, &d), side, MARGIN);
+        place(app, &d, spot);
+        remember_spot(app, &d, spot, true);
+    }
+    refresh(app, &d);
+    let _ = app.emit_to(LABEL, "desktop-size", side);
+    island::follow_buddybara(app);
 }
 
 // ── Poll (Windows) ────────────────────────────────────────────────────────────
@@ -617,6 +685,8 @@ fn spawn_poll(app: AppHandle, d: Arc<Desktop>) {
                     if pos != d.inner.lock().unwrap().pos {
                         place(&app, &d, pos);
                         island::follow_buddybara(&app);
+                        // His page watches for a shake (src/desktop/main.ts).
+                        let _ = app.emit_to(LABEL, "desktop-carried", cx / scale);
                     }
                 } else {
                     // Released: hand the drop to the async pool, where the
@@ -636,6 +706,7 @@ fn spawn_poll(app: AppHandle, d: Arc<Desktop>) {
             let Ok(origin) = win.outer_position() else { continue };
             let scale = win.scale_factor().unwrap_or(1.0);
             let local = ((cx - origin.x as f64) / scale, (cy - origin.y as f64) / scale);
+            let side = d.side();
             // A file dragged onto him must find his window, and
             // click-through hides it from OLE's hit test (the drop would land
             // on whatever is below). While a button is held over all of him as
@@ -643,9 +714,9 @@ fn spawn_poll(app: AppHandle, d: Arc<Desktop>) {
             // the empty corners of his window stay see-through, for drops meant
             // for what is under them. A press that started elsewhere keeps its
             // capture there. Elsewhere his page takes no files at all.
-            let over_him = logic::is_within(local, SIZE, logic::FIGURE_RADIUS_FRACTION);
-            let accept = logic::is_over_body(local, SIZE)
-                || logic::is_over_hide_button(local)
+            let over_him = logic::is_within(local, side, logic::FIGURE_RADIUS_FRACTION);
+            let accept = logic::is_over_body(local, side)
+                || logic::is_over_hide_button(local, side)
                 || (over_him && platform::left_button_down());
             {
                 let mut i = d.inner.lock().unwrap();
@@ -679,10 +750,15 @@ pub fn desktop_buddybara_info(app: AppHandle, desktop: State<Arc<Desktop>>) -> D
         .map(|s| s.settings.lock().unwrap().desktop_buddybara.on_desktop)
         .unwrap_or(false);
     let mode = if desktop.failed.load(Ordering::SeqCst) { DesktopMode::Off } else { desktop.mode };
+    let (shown, side) = {
+        let i = desktop.inner.lock().unwrap();
+        (i.shown, i.side)
+    };
     DesktopInfo {
         mode: mode.as_str(),
         on_desktop: on_desktop && mode != DesktopMode::Off,
-        shown: desktop.inner.lock().unwrap().shown,
+        shown,
+        side,
     }
 }
 
@@ -750,7 +826,8 @@ pub async fn desktop_buddybara_drag_end(app: AppHandle, x: f64, y: f64) {
             });
         }
         if let Some(win) = window(&app) {
-            let _ = win.set_size(tauri::LogicalSize::new(SIZE, SIZE));
+            let side = d.side();
+            let _ = win.set_size(tauri::LogicalSize::new(side, side));
         }
     }
     place(&app, &d, (x, y));
@@ -777,7 +854,7 @@ pub async fn desktop_buddybara_fly_out(app: AppHandle, anywhere: Option<bool>) -
         crate::log::line("desktop Buddybara: no panel window to fly out of");
         return false;
     };
-    let start = logic::launch_spot(cx, top, SIZE, scale);
+    let start = logic::launch_spot(cx, top, d.side(), scale);
     {
         let mut i = d.inner.lock().unwrap();
         i.landed = false;
@@ -858,9 +935,41 @@ mod tests {
     #[test]
     fn his_minimize_button_takes_the_click_beside_his_head_but_not_his_body() {
         use super::logic::{is_over_body, is_over_hide_button};
-        assert!(is_over_hide_button((94.0, 28.0)) && is_over_hide_button((100.0, 34.0)));
-        assert!(!is_over_hide_button((60.0, 60.0)) && !is_over_hide_button((118.0, 2.0)));
-        assert!(!is_over_body((94.0, 28.0), 120.0));
+        let s = 120.0;
+        assert!(is_over_hide_button((94.0, 28.0), s) && is_over_hide_button((100.0, 34.0), s));
+        assert!(!is_over_hide_button((60.0, 60.0), s) && !is_over_hide_button((118.0, 2.0), s));
+        assert!(!is_over_body((94.0, 28.0), s));
+    }
+
+    #[test]
+    fn his_minimize_button_follows_his_head_at_every_size_and_never_covers_his_body() {
+        use super::logic::{hide_button, is_over_body, is_over_hide_button, side_for, SIZES};
+        assert_eq!(hide_button(120.0), (94.0, 28.0, 11.0));
+        assert_eq!(hide_button(240.0), (188.0, 56.0, 11.0 * 1.3));
+        assert_eq!(hide_button(60.0), (47.0, 14.0, 11.0 * 0.8));
+        for percent in SIZES {
+            let s = side_for(percent);
+            let (cx, cy, r) = hide_button(s);
+            assert!(is_over_hide_button((cx, cy), s), "{percent} %");
+            // The two never overlap: a press on the button is never a press on him.
+            let (c, body) = (s / 2.0, s * BODY_RADIUS_FRACTION);
+            assert!(((cx - c).powi(2) + (cy - c).powi(2)).sqrt() >= body + r, "{percent} %");
+            assert!(!is_over_body((cx, cy), s), "{percent} %");
+        }
+    }
+
+    #[test]
+    fn his_size_is_one_of_the_seven_and_100_is_the_usual_120_px() {
+        assert_eq!(side_for(100), 120.0);
+        assert_eq!(side_for(50), 60.0);
+        assert_eq!(side_for(200), 240.0);
+        assert_eq!(SIZES.iter().filter(|&&p| p < 100).count(), 3);
+        assert_eq!(SIZES.iter().filter(|&&p| p > 100).count(), 3);
+        // A hand-edited settings.json: the nearest size, never 3 px or 3000.
+        assert_eq!(side_for(0), 60.0);
+        assert_eq!(side_for(5000), 240.0);
+        assert_eq!(side_for(110), 120.0);
+        assert_eq!(side_for(120), 150.0);
     }
 
     #[test]
