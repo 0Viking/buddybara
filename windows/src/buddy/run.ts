@@ -23,6 +23,9 @@ export interface Chat {
   loading: boolean;
   /** The run working on it (code.rs run id), while one is. */
   run: number | null;
+  /** A run between turns, kept alive by its background tasks (a dev server):
+   *  the next message goes into it, and a turn it starts by itself shows up. */
+  alive?: number | null;
   queue: Queued[];
   /** How its run ended: with an error, or stopped by the user. */
   failed: boolean;

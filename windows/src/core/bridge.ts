@@ -80,6 +80,8 @@ export interface CodeRunEvent {
   tool?: string;
   input?: Record<string, unknown>;
   error?: boolean;
+  /** On a result: background tasks still running, which keep the run alive between turns. */
+  background?: number;
 }
 
 export const Bridge = {

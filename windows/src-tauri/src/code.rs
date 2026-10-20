@@ -755,9 +755,10 @@ fn message(prompt: &str, attachments: &[String]) -> Result<(String, bool), Strin
 }
 
 /// A message for a run at work, read at its next step (or as one more turn if
-/// its answer is already being written). False when it takes no more: its turn
-/// is over, or the message has files and the run may not read the inbox — the
-/// page then sends it as the next run.
+/// its answer is already being written), or for a run between turns that its
+/// background tasks keep alive. False when it takes no more: its turn is over
+/// with nothing in the background, or the message has files and the run may
+/// not read the inbox — the page then sends it as the next run.
 pub fn say(run: u64, prompt: &str, attachments: &[String]) -> Result<bool, String> {
     let (line, with_files) = message(prompt, attachments)?;
     let inputs = INPUTS.lock().unwrap();
@@ -784,14 +785,27 @@ fn watch(app: &AppHandle, run: u64, mut child: Child) {
         let _ = app.emit_to(WINDOW_LABEL, "code-run", event);
     };
     let mut answered = false;
+    // Background tasks still running (a dev server, a watcher): Claude Code
+    // stays alive for them after its answer, and starts a turn by itself when
+    // one ends.
+    let mut background = 0;
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
             let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
-            if v.get("type").and_then(Value::as_str) == Some("result") {
+            if v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed") {
+                background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+            }
+            // The turn is over. With nothing left in the background the input
+            // ends and Claude Code exits; otherwise it stays open, so the next
+            // message goes into this same process, as in VS Code.
+            if v.get("type").and_then(Value::as_str) == Some("result") && background == 0 {
                 INPUTS.lock().unwrap().remove(&run);
             }
             for mut event in events(&v) {
                 answered |= event["kind"] == "result";
+                if event["kind"] == "result" {
+                    event["background"] = json!(background);
+                }
                 event["run"] = json!(run);
                 emit(event);
             }

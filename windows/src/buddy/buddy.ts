@@ -327,6 +327,10 @@ export class Buddy {
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },
       bar, this.menu, this.confirm, this.body, this.terminal.el, this.card, this.files, this.composer, this.dropZone);
+    // ponytail: the side-chat drawer is a mockup (drawer.ts), nothing connected yet.
+    const drawer = new Drawer(main);
+    this.composer.after(drawer.bar, drawer.space);
+    main.append(drawer.el);
     this.el = h("div", { id: "buddy" }, side, main, this.setup.el);
     this.genie = h("div", { id: "genie" }, this.el);
     root.append(this.genie);
@@ -784,7 +788,7 @@ export class Buddy {
   /** A conversation stays findable by its session while it runs or holds a queue. */
   private track(chat: Chat) {
     if (!chat.id) return;
-    if (chat.run != null || chat.queue.length) this.live.set(chat.id, chat);
+    if (chat.run != null || chat.alive != null || chat.queue.length) this.live.set(chat.id, chat);
     else if (this.live.get(chat.id) === chat) this.live.delete(chat.id);
   }
 
@@ -833,10 +837,10 @@ export class Buddy {
     }
     // A Claude Code run at work reads it at its next step; anything else at
     // work (starting, being stopped, another model) gets it as the next turn.
-    const live = chat.run != null && chat.run !== STARTING && !chat.other && !chat.stopped;
+    const live = chat.other || chat.stopped || chat.run === STARTING ? null : chat.run ?? chat.alive ?? null;
     // What code.rs would refuse is said now, while nothing is cleared yet (a
     // queued turn goes merged with those before it).
-    const goes = chat.run != null && !live ? mergeQueued([...chat.queue, { text, files }]) : { text, files };
+    const goes = chat.run != null && live == null ? mergeQueued([...chat.queue, { text, files }]) : { text, files };
     const refused = tooBig(goes.text, goes.files);
     if (refused) {
       this.attachError = refused;
@@ -849,7 +853,7 @@ export class Buddy {
     this.attachError = "";
     this.fitInput();
     Sound.play("send");
-    if (live) return this.say(chat, chat.run!, text, files);
+    if (live != null) return this.say(chat, live, text, files);
     if (chat.run != null) {
       // Claude is still at it: this is the next turn, sent the moment the run ends.
       chat.queue.push({ text, files });
@@ -896,7 +900,16 @@ export class Buddy {
     const line = userLine(text, files);
     chat.lines.push(line);
     this.render();
-    if (await Bridge.codeSay(run, text, files).catch(() => false)) return;
+    if (await Bridge.codeSay(run, text, files).catch(() => false)) {
+      // Between turns: this message starts the next one.
+      if (chat.run == null) {
+        chat.run = run;
+        chat.alive = null;
+        this.track(chat);
+        this.render();
+      }
+      return;
+    }
     // Its turn was already over (or its files need a run of their own): the next turn, as before.
     chat.lines = chat.lines.filter((l) => l !== line);
     chat.queue.push({ text, files });
@@ -944,12 +957,29 @@ export class Buddy {
     }
     if (e.kind === "exit") {
       this.runs.delete(e.run);
-      chat.run = null;
-      this.ended(chat);
+      if (chat.alive === e.run) chat.alive = null;
+      if (chat.run === e.run) {
+        chat.run = null;
+        this.ended(chat);
+      } else this.track(chat);
     } else {
+      // Alive between turns, it starts one by itself (a background task ended).
+      if (chat.run == null && chat.alive === e.run && e.kind !== "result") {
+        chat.run = e.run;
+        chat.alive = null;
+      }
       applyRunEvent(chat, e);
       if (e.kind === "init") this.named(chat);
       if (e.kind === "result") Sound.play(e.error ? "error" : "finish");
+      // The turn is over, but background tasks keep the run alive: the
+      // conversation is free again, and its next message goes into this run.
+      if (e.kind === "result" && e.background && chat.run === e.run) {
+        chat.run = null;
+        chat.alive = e.run;
+        const queued = dropQueue(chat);
+        if (queued) void this.say(chat, e.run, queued.text, queued.files);
+        else this.ended(chat);
+      }
     }
     if (this.chat === chat || e.kind === "exit") this.render();
   }
@@ -1203,7 +1233,7 @@ export class Buddy {
   /** Whether a run of ours works in this project, or in this session. */
   private working(project: string, session?: string): boolean {
     for (const c of this.runs.values()) {
-      if (session ? c.id === session : c.project.path === project) return true;
+      if (c.run != null && (session ? c.id === session : c.project.path === project)) return true;
     }
     return false;
   }
