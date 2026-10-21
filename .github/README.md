@@ -5,10 +5,7 @@ you drop it, with a mikan on its head. Click it and a panel opens with your proj
 Code sessions and the conversation, so you can keep working with Claude without an editor or a
 terminal.
 
-### [⬇ Download Buddybara for Windows](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)
-
-Windows 10 or 11 (64-bit) · free and open source · no admin rights needed ·
-[all releases](https://github.com/0Viking/buddybara/releases)
+Windows 10 or 11 (64-bit) · free and open source · no admin rights needed
 
 ### What it does
 
@@ -39,8 +36,8 @@ Windows 10 or 11 (64-bit) · free and open source · no admin rights needed ·
 
 ## Install
 
-1. **[Download the installer](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)**
-   and run it.
+1. Get the installer, `Buddybara-Windows-<version>-setup.exe`, from the **Releases** section of
+   this repository (or [build it yourself](#build-from-source)), and run it.
 2. Windows may say **"Windows protected your PC"**: the installer isn't code-signed yet. Click
    **More info → Run anyway**.
 3. Buddybara appears at the bottom right of your screen. Drag it wherever you like.
@@ -66,8 +63,8 @@ Start menu. While it runs, starting it again opens the panel.
 
 ## Update
 
-Download the [latest installer](https://github.com/0Viking/buddybara/releases/latest/download/Buddybara-Windows-setup.exe)
-and run it. Your settings, keys and hooks are kept.
+Run the installer of the newer release (from the **Releases** section). Your settings, keys and
+hooks are kept.
 
 ## Uninstall
 
