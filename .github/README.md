@@ -12,15 +12,23 @@ Windows 10 or 11 (64-bit) · free and open source · no admin rights needed
 - **Your projects and conversations, one click away.** Pick a project, open a session or start a
   new one, and chat with Claude Code. Choose the mode (Manual, Edit automatically, Plan, Auto), the
   effort and the model. Send a message while Claude works and it reads it at its next step.
+- **Type `/` for every command.** The panel lists Claude Code's commands, your skills and your
+  plugins', with what each one does. `/model`, `/plan`, `/usage`, `/resume`, `/copy`, `/memory` and
+  the others work from the panel, and the conversation shows when Claude Code compacts it.
 - **Permission requests and questions come to you.** They show in the panel, and nothing is
   approved without your click. A session that finishes lets you know.
 - **Quiet while you play.** Nothing pops up while a game or a video is full screen.
-- **Your plan's usage on the mikan**, so you see how much of your Claude plan is left.
-- **A real terminal** for any conversation, when you want Claude Code's own screen.
+- **Your usage at a glance:** your plan's limits on the mikan and in the panel, and each
+  conversation's cost and time (with an API key, that's what you see).
+- **A real terminal** for any conversation, when you want Claude Code's own screen. Write in the
+  panel again and the conversation comes back to it, no `/exit` needed.
 - **Skills, plugins and connectors** from Anthropic's Directory, searchable and installed for
-  Claude Code in one click.
+  Claude Code in one click. Add your own from a file, a folder or a link: Buddybara shows what a
+  plugin would run before anything is installed. Or write a new skill in Settings, and it's a
+  `/command` right away.
 - **More than Claude Code:** Codex, Gemini CLI, Cursor and other agents show their work here too;
-  chat with other models (OpenAI, Google, OpenRouter, Ollama, LM Studio); and keep an eye on
+  chat with other models (OpenAI, Google, OpenRouter, Ollama, LM Studio) in the panel's drawer,
+  next to your Claude conversation; and keep an eye on
   GitHub, Vercel, Stripe and other services in the Services tab.
 - **In 10 languages**: English, 中文, हिन्दी, Español, العربية, Français, বাংলা, Português, Русский,
   Bahasa Indonesia.
@@ -107,7 +115,7 @@ npx tauri build --no-bundle    # the app: windows\target\release\Buddybara.exe
 npm run pack                   # or the installer: windows\release\
 ```
 
-Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.0.0`, matching
+Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.1.0`, matching
 `windows/src-tauri/tauri.conf.json`) publishes the installer as a GitHub release.
 
 ## License
