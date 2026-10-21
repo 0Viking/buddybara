@@ -16,6 +16,7 @@
 import {
   Bridge, onDragDrop, onEvent,
   type ChatDelta, type CodeProject, type CodeRunEvent, type CodeSession, type DragDropPayload, type DroppedFile,
+  type SessionUsage, type SlashCommand,
 } from "../core/bridge";
 import { BUDDY_H, BUDDY_NECK, BUDDY_W, type AlertView } from "../core/layout";
 import { Sound } from "../core/sound";
@@ -24,17 +25,21 @@ import { DesktopLink } from "../island/desktop";
 import { N_, language, t, tl } from "../i18n/i18n";
 import { clear, h, svg } from "../views/dom";
 import { ICONS } from "../views/icons";
-import { renderMarkdown } from "../views/markdown";
+import { renderMarkdown, writeClipboard } from "../views/markdown";
 import {
   PASTE_MAX_MB, ago, applyRunEvent, dropQueue, folderOf, lineOf, makeChat, mergeQueued, pastedName, takeQueue,
-  tooBig, userLine, type Chat, type Line, type OtherModel,
+  tokensShort, tooBig, userLine, type Chat, type Line, type OtherModel,
 } from "./run";
+import {
+  answerToCopy, findSession, matchCommands, menuCommands, panelCommand, pendingHint, pickEffort, pickModel, slashQuery,
+  withCommand, type CommandGroup, type MenuCommand, type PanelCommand,
+} from "./commands";
 import { POUR_MS, genieClear, genieFrame, genieHidden, genieWanted } from "./genie";
 import { THEME_EVENT } from "../core/theme";
 import { BuddyTerminal, type TermTarget } from "./terminal";
 import { Setup } from "./setup";
 import { renderUsage } from "./usage";
-import { Drawer } from "./drawer";
+import { Drawer, aiProvider } from "./drawer";
 import { refreshClaudePlan } from "../island/hooks";
 import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
@@ -77,6 +82,22 @@ const STARTING = 0;
 
 /** Stop takes no click for this long after the send button turned into it. */
 const STOP_GRACE_MS = 600;
+
+/** The project of a drawer's chat with another model started before any was picked: its links lead nowhere. */
+const NO_PROJECT: CodeProject = { name: "", path: "", sessions: 0, last: 0, elsewhere: false };
+
+/** A project's `/` menu is asked of Claude Code again once it is this old (a skill installed since). */
+const COMMANDS_FRESH_MS = 10 * 60_000;
+
+/** Measures the field's text, for where a command's argument hint goes (renderGhost). */
+const measurer = document.createElement("canvas");
+
+/** The `/` menu's sections (commands.ts GROUPS). */
+const GROUP_NAMES: Record<CommandGroup, string> = {
+  builtin: N_("Commands"),
+  skill: N_("Skills"),
+  plugin: N_("Plugins"),
+};
 
 /** News of a session nobody has looked at yet: it finished, failed, or waits for an answer. */
 type Notice = { cwd: string; kind: "done" | "error" | "input"; at: number };
@@ -197,6 +218,13 @@ function sentView(text: string, files: string[] | undefined, queued = false): HT
 /** `base`: the conversation's project, where the relative paths its answers link start. */
 function lineView(line: Line, base: string): HTMLElement {
   if (line.role === "user") return sentView(line.text, line.files);
+  // Claude Code summarizing the conversation: a line across, what it did on it.
+  if (line.role === "compacting" || line.role === "compacted") {
+    const text = line.role === "compacting"
+      ? t("Compacting…")
+      : line.tokens ? t("Compacted {n} tokens", { n: tokensShort(line.tokens) }) : t("Conversation compacted");
+    return h("div", { class: line.role === "compacting" ? "b-compact busy" : "b-compact" }, h("span", { text }));
+  }
   if (line.role === "assistant") {
     const reply = h("div", { class: "reply" });
     renderMarkdown(reply, line.text, base);
@@ -228,8 +256,13 @@ export class Buddy {
   private failures = 0;
   /** When the send button last turned into Stop. */
   private stopSince = 0;
-  /** Why the last file (or message) couldn't be taken. */
+  /** A conversation is being taken over from the terminal (takeFromTerminal): Enter again waits. */
+  private handing = false;
+  /** Why the last file (or message, or command) couldn't be taken. */
   private attachError = "";
+  /** A word under the field for a moment, and its timer (flashNote). */
+  private note = "";
+  private noteTimer = 0;
   /** The conversation follows its end, unless the user scrolled up to read. */
   private pinned = true;
   /** Unread news by session: a dot on it and on its project until it is opened. */
@@ -275,6 +308,20 @@ export class Buddy {
   private title = h("div", { class: "b-title" });
   private modeBtn = h("button", { class: "b-chip" });
   private menu = h("div", { class: "b-menu" });
+  /** A project's right-click menu, at the pointer (openProjectMenu). */
+  private projectMenu = h("div", { class: "b-menu b-context" });
+  /** The `/` menu over the field (renderSlash): the rows it shows, the one picked by the arrows. */
+  private slash = h("div", { class: "b-slash" });
+  private slashRows: MenuCommand[] = [];
+  private slashAt = 0;
+  /** What was typed after the slash when the rows were last listed: another query starts at the top. */
+  private slashFor: string | null = null;
+  /** The field's text when Escape put the menu away: it stays away until the text changes. */
+  private slashDismissed: string | null = null;
+  /** Each project's commands as Claude Code last listed them (null until it has), and when. */
+  private commands = new Map<string, { list: SlashCommand[] | null; at: number; asking: boolean }>();
+  /** The argument hint of the command typed, greyed after it in the field (renderGhost). */
+  private ghost = h("span", { class: "b-ghost", "aria-hidden": "true" });
   private termBtn = h("button", { class: "b-icon", title: tl("Terminal") }, svg(ICONS.terminal, 14, { stroke: 1.8 }));
   /** New conversation, or, in one, deleting it. */
   private newBtn = h("button", { class: "b-icon" });
@@ -294,6 +341,10 @@ export class Buddy {
   private partial = new WeakMap<Chat, Line>();
   /** Each project's conversations with other models, kept while Buddybara runs (they aren't saved). */
   private others = new Map<string, Chat[]>();
+  /** The drawer's chats with other models, one per provider, kept while Buddybara runs (aiView). */
+  private aiChats = new Map<string, Chat>();
+  /** Their tabs, built once each: put back, a text box would lose the keyboard. */
+  private aiPanes = new Map<string, { pane: HTMLElement; log: HTMLElement; input: HTMLTextAreaElement; model: HTMLButtonElement; fresh: HTMLButtonElement }>();
   private servicesRow = h("button", { class: "b-project b-services" });
   private terminal = new BuddyTerminal(
     (target) => this.terminalEnded(target),
@@ -307,8 +358,12 @@ export class Buddy {
       void Bridge.openSettingsWindow(page);
     },
   );
-  /** The plan usage above Settings (usage.ts). */
-  private usage = h("div", { class: "b-usage" });
+  /** The usage above Settings (usage.ts): a click opens Settings → Claude Code → Usage. */
+  private usage = h("div", { class: "b-usage", role: "button", title: tl("Usage") });
+  /** The totals it shows (refreshTotals), whose they are, and the last asking. */
+  private totals: SessionUsage | null = null;
+  private totalsKey: string | null = null;
+  private totalsAsked = 0;
   /** The drawer under the conversation: the terminal and side questions (drawer.ts). */
   private drawer: Drawer;
   private btw: Chat | null = null;
@@ -345,15 +400,21 @@ export class Buddy {
       picked: (tab) => {
         if (tab === "terminal") void this.showTerminal();
         else {
+          this.refreshFromTerminal();
           this.render();
-          this.btwInput.focus();
+          const provider = aiProvider(tab);
+          (provider ? this.aiPane(provider).input : this.btwInput).focus();
         }
       },
       closed: () => {
+        this.refreshFromTerminal();
         this.render();
         if (this.shown) this.input.focus();
       },
+      slid: () => this.refreshFromTerminal(),
       btwView: () => this.btwView(),
+      aiReady: () => readyProviders(State.settings, this.otherKeys).map((r) => r.def.id),
+      aiView: (provider) => this.aiView(provider),
     });
     this.composer.after(this.drawer.bar, this.drawer.space);
     main.append(this.drawer.el);
@@ -363,7 +424,9 @@ export class Buddy {
         void this.sendBtw();
       }
     });
-    this.el = h("div", { id: "buddy" }, side, main, this.setup.el);
+    this.el = h("div", { id: "buddy" }, side, main, this.setup.el, this.projectMenu);
+    this.projectMenu.addEventListener("contextmenu", (e) => e.preventDefault());
+    this.list.addEventListener("scroll", () => this.closeProjectMenu());
     this.genie = h("div", { id: "genie" }, this.el);
     root.append(this.genie);
 
@@ -389,6 +452,7 @@ export class Buddy {
     // A click anywhere else is "no" to the question.
     document.addEventListener("pointerdown", (e) => {
       const at = e.target as Node;
+      if (!this.projectMenu.contains(at)) this.closeProjectMenu();
       if (this.confirming && !this.confirm.contains(at) && !this.newBtn.contains(at)) {
         this.confirming = false;
         this.render();
@@ -442,6 +506,7 @@ export class Buddy {
       }
     });
     this.input.addEventListener("keydown", (e) => {
+      if (this.slashKey(e)) return;
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void this.send();
@@ -451,6 +516,11 @@ export class Buddy {
       this.fitInput();
       this.renderComposer();
     });
+    // The menu follows the caret, and goes when the field is left.
+    for (const type of ["click", "keyup", "focus", "blur"]) this.input.addEventListener(type, () => this.renderSlash());
+    this.composer.append(this.slash, this.ghost);
+    // A press on the menu leaves the keyboard in the field.
+    this.slash.addEventListener("pointerdown", (e) => e.preventDefault());
     this.body.addEventListener("scroll", () => {
       // Folded to one pixel, its sizes say nothing about the reader.
       if (!this.shown || this.body.clientHeight < 40) return;
@@ -485,6 +555,7 @@ export class Buddy {
       if (e.key !== "Escape" || !this.shown) return;
       // Escape in the terminal is Claude's (it interrupts, it closes its menus).
       if (this.terminal.el.contains(e.target as Node)) return;
+      if (this.closeProjectMenu()) return;
       if (this.menuOpen) this.menuOpen = false;
       else if (this.confirming) this.confirming = false;
       else this.hide();
@@ -496,8 +567,9 @@ export class Buddy {
       minimize: () => this.minimize(),
     });
     State.subscribe(() => this.renderCard());
-    renderUsage(this.usage);
-    State.subscribe(() => renderUsage(this.usage));
+    renderUsage(this.usage, null);
+    State.subscribe(() => renderUsage(this.usage, this.totals));
+    this.usage.addEventListener("click", () => this.showUsage());
     // A service switched on or off in Settings: its row and its card follow.
     State.subscribe(() => {
       this.renderServicesRow();
@@ -511,6 +583,8 @@ export class Buddy {
     // One step at a time, each on its own: whatever fails, Buddybara still comes
     // out and the panel still opens.
     await logged("run events", onEvent<CodeRunEvent>("code-run", (e) => this.onRun(e)));
+    // A skill or plugin installed or removed in Settings: the `/` menu is asked for again.
+    await logged("commands", onEvent<null>("commands-changed", () => this.commands.clear()));
     await logged("file drops", onDragDrop((e) => this.onDrag(e)));
     await logged("notifications", onEvent<HookNotice>("hook", (p) => this.onHook(p)));
     await logged("terminal", this.terminal.init());
@@ -575,7 +649,8 @@ export class Buddy {
       void this.loadProjects();
       void this.refreshOtherKeys();
       void this.setup.check();
-      renderUsage(this.usage);
+      // Other conversations may have run meanwhile (VS Code, a terminal).
+      this.totalsKey = null;
       refreshClaudePlan();
       Sound.play("open");
       // The conversation it opens on is looked at now.
@@ -597,6 +672,7 @@ export class Buddy {
     if (!this.shown) return;
     this.shown = false;
     this.menuOpen = false;
+    this.closeProjectMenu();
     this.setDragging(false);
     // Folded, the window may keep the keyboard: what is typed next must reach
     // nothing nobody sees — an Enter in the field, a Space on the Stop button.
@@ -872,14 +948,21 @@ export class Buddy {
     // One that could not be copied meanwhile: its reason stays up, nothing
     // goes; Enter again sends without it.
     if (this.failures !== failures) return;
-    const text = this.input.value.trim();
-    // /btw: a side question in the drawer; the conversation itself is untouched.
-    const btw = /^\/btw(?:\s+|$)/i.exec(text);
-    if (btw) {
-      if (await this.askBtw(text.slice(btw[0].length))) {
-        this.input.value = "";
-        this.fitInput();
-      }
+    let text = this.input.value.trim();
+    // The panel's own commands (commands.ts panelCommand): /plan with a request
+    // switches to Plan mode, and the request goes like any message.
+    const own = panelCommand(text);
+    if (own?.name === "plan" && own.arg) {
+      this.mode = "plan";
+      store("mode", "plan");
+      text = own.arg;
+    } else if (own?.name === "btw") {
+      // A side question in the drawer; the conversation itself is untouched.
+      if (await this.askBtw(own.arg)) this.clearInput();
+      return;
+    } else if (own) {
+      this.clearInput();
+      await this.runCommand(own);
       return;
     }
     const files = this.attachments.map((f) => f.path);
@@ -895,10 +978,9 @@ export class Buddy {
       this.renderAttachments();
       return;
     }
-    // Claude Code has it open in the terminal: two of them would write one session.
-    if (chat.id && this.terminal.runsFor({ project: chat.project.path, session: chat.id })) {
-      this.attachError = t("This conversation is open in the terminal.");
-      this.renderAttachments();
+    // Claude Code has it open in the terminal: two of them would write one
+    // session. Between turns there, it quits and the conversation goes on here.
+    if (chat.id && this.terminal.runsFor({ project: chat.project.path, session: chat.id }) && !(await this.takeFromTerminal(chat))) {
       return;
     }
     // A Claude Code run at work reads it at its next step; anything else at
@@ -1113,7 +1195,9 @@ export class Buddy {
         chat.run = e.run;
         chat.alive = null;
       }
+      const title = chat.title;
       applyRunEvent(chat, e);
+      if (chat.title !== title) this.titled(chat);
       if (e.kind === "init") this.named(chat);
       if (e.kind === "result") Sound.play(e.error ? "error" : "finish");
       // The turn is over, but background tasks keep the run alive: the
@@ -1138,6 +1222,8 @@ export class Buddy {
 
   /** A run ended: what was queued goes next, or back to the composer if it failed or was stopped. */
   private ended(chat: Chat) {
+    // Claude Code saved the run's totals: the usage box asks again.
+    this.totalsKey = null;
     const next = chat.failed || chat.stopped ? null : takeQueue(chat);
     if (next) void this.start(chat, next.prompt, next.attachments, next.lines);
     else if (this.chat === chat) this.restoreQueue(chat);
@@ -1357,6 +1443,7 @@ export class Buddy {
   private render() {
     // News that comes in while the tab is on screen is seen at once.
     if (this.services && this.shown && servicesNews()) servicesSeen();
+    this.refreshTotals();
     this.renderServicesRow();
     this.renderNewProject();
     this.renderProjects();
@@ -1369,6 +1456,27 @@ export class Buddy {
     this.renderCard();
     this.renderAttachments();
     this.renderComposer();
+  }
+
+  /**
+   * The usage box's totals (code.rs usage): the conversation on screen's,
+   * else the picked project's newest, else the newest of all. Asked again
+   * when that changes, when the panel opens, and when a run ends.
+   */
+  private refreshTotals() {
+    if (!this.shown) return;
+    const project = this.chat?.project.path ?? this.project?.path ?? null;
+    const session = this.chat?.other ? null : this.chat?.id ?? null;
+    const key = `${project}\n${session}`;
+    if (key === this.totalsKey) return;
+    this.totalsKey = key;
+    const asked = ++this.totalsAsked;
+    const done = (u: SessionUsage | null) => {
+      if (asked !== this.totalsAsked) return;
+      this.totals = u;
+      renderUsage(this.usage, u);
+    };
+    Bridge.codeUsage(project, session).then(done, () => done(null));
   }
 
   private renderNewProject() {
@@ -1404,9 +1512,36 @@ export class Buddy {
           kind ? h("span", { class: `b-news ${kind}` }) : null,
         );
         row.addEventListener("click", () => void this.pickProject(p));
+        row.addEventListener("contextmenu", (e) => this.openProjectMenu(e, p));
         this.list.append(row);
       });
     });
+  }
+
+  /** Right-click on a project, in place of WebView2's own menu (Back, Refresh, Print…). */
+  private openProjectMenu(e: MouseEvent, project: CodeProject) {
+    e.preventDefault();
+    const explorer = h("button", { class: "b-context-item" }, svg(ICONS.folder, 13), h("span", { text: t("Open in File Explorer") }));
+    explorer.addEventListener("click", () => {
+      this.closeProjectMenu();
+      // A folder only Claude Code's sessions remember may be gone since.
+      void Bridge.openPath(project.path, null, null).catch(() => {});
+    });
+    this.projectMenu.replaceChildren(explorer);
+    this.projectMenu.classList.add("open");
+    // At the pointer, kept inside the panel.
+    const box = this.el.getBoundingClientRect();
+    const x = Math.min(e.clientX - box.left, box.width - this.projectMenu.offsetWidth - 6);
+    const y = Math.min(e.clientY - box.top, box.height - this.projectMenu.offsetHeight - 6);
+    this.projectMenu.style.left = `${Math.max(6, x)}px`;
+    this.projectMenu.style.top = `${Math.max(6, y)}px`;
+  }
+
+  /** True if it was open. */
+  private closeProjectMenu(): boolean {
+    if (!this.projectMenu.classList.contains("open")) return false;
+    this.projectMenu.classList.remove("open");
+    return true;
   }
 
   /** The Services row, there once a service is on, with a dot for news. */
@@ -1540,14 +1675,23 @@ export class Buddy {
     this.confirming = false;
   }
 
-  /** Claude Code ended in the terminal: what it wrote there shows in the conversation, or the list. */
+  /**
+   * Claude Code ended in the terminal (/exit, or a message from the panel took
+   * the conversation over): the drawer slides down if the terminal was in
+   * front, its tab kept for next time, and what Claude Code wrote there shows
+   * in the conversation, or the list.
+   */
   private terminalEnded(target: TermTarget) {
+    if (this.termShown) {
+      this.drawer.hide();
+      if (this.shown) this.input.focus();
+    }
     void this.loadProjects();
     const chat = this.chat;
     if (target.session && chat?.id === target.session && chat.run == null) {
       void this.reloadChat(chat);
     } else if (!target.session && !chat && this.project && samePath(this.project.path) === samePath(target.project)) {
-      // The list again, the terminal left on screen: its last words stay readable.
+      // A new session the terminal started: the project's list shows it.
       const project = this.project;
       void Bridge.codeSessions(project.path).then((list) => {
         if (this.project !== project || this.chat) return;
@@ -1561,12 +1705,52 @@ export class Buddy {
   /** The turns of a conversation read again from its file, staying on it. */
   private async reloadChat(chat: Chat) {
     if (!chat.id) return;
+    let lines: Line[];
     try {
-      chat.lines = (await Bridge.codeMessages(chat.project.path, chat.id)).map(lineOf);
+      lines = (await Bridge.codeMessages(chat.project.path, chat.id)).map(lineOf);
     } catch {
       return;
     }
+    // A run of ours started meanwhile: its lines are the newer ones.
+    if (chat.run != null) return;
+    chat.lines = lines;
     if (this.chat === chat) this.render();
+  }
+
+  /**
+   * A message for a conversation Claude Code has open in the terminal: if it
+   * is between turns there, it quits (terminal.ts quit) and what it wrote is
+   * read, so the message goes on from here; the Terminal tab resumes it again
+   * later. Mid-turn (at work, or waiting on a permission or a question), the
+   * message waits in the field. True: the conversation is the panel's now.
+   */
+  private async takeFromTerminal(chat: Chat): Promise<boolean> {
+    if (this.handing) return false;
+    const target = { project: chat.project.path, session: chat.id };
+    const refuse = (why: string) => {
+      this.attachError = why;
+      this.renderAttachments();
+      return false;
+    };
+    this.handing = true;
+    try {
+      if (await Bridge.codeTurnOpen(chat.project.path, chat.id!).catch(() => true)) {
+        return refuse(t("Claude is still at work in the terminal: let it finish there (or stop it with Esc), then send again."));
+      }
+      await this.terminal.quit();
+      if (this.terminal.runsFor(target)) return refuse(t("Couldn't close Claude Code in the terminal."));
+      await this.reloadChat(chat);
+      return true;
+    } finally {
+      this.handing = false;
+    }
+  }
+
+  /** Back from the terminal (its tab put away or left): what Claude Code wrote there shows in the conversation. */
+  private refreshFromTerminal() {
+    const chat = this.chat;
+    if (!chat?.id || chat.run != null || this.termShown) return;
+    if (this.terminal.runsFor({ project: chat.project.path, session: chat.id })) void this.reloadChat(chat);
   }
 
   private renderMenu() {
@@ -1697,8 +1881,9 @@ export class Buddy {
     const run = ++this.nextOtherRun;
     chat.run = run;
     this.otherRuns.set(run, chat);
+    // On its project's list, unless it is a drawer's tab.
     const kept = this.others.get(chat.project.path) ?? [];
-    if (!kept.includes(chat)) this.others.set(chat.project.path, [chat, ...kept]);
+    if (!chat.side && !kept.includes(chat)) this.others.set(chat.project.path, [chat, ...kept]);
     this.render();
     const turns = chat.lines
       .filter((l) => l.role === "user" || l.role === "assistant")
@@ -1744,6 +1929,87 @@ export class Buddy {
     }
     line.text = d.text;
     if (this.chat === chat) this.render();
+    else if (chat.side) this.drawer.render();
+  }
+
+  // ── Other models in the drawer ──────────────────────────────────────────────
+
+  /** An other model's tab: which model, a new conversation, the chat, its text box. */
+  private aiPane(provider: string) {
+    const known = this.aiPanes.get(provider);
+    if (known) return known;
+    const log = h("div", { class: "b-log b-drawer-log" });
+    const input = h("textarea", { class: "b-input", rows: "1", spellcheck: "false" }) as HTMLTextAreaElement;
+    // The model Settings → AI models picked for it: changed there.
+    const model = h("button", { class: "b-ai-model", title: tl("Settings") }) as HTMLButtonElement;
+    model.addEventListener("click", () => {
+      this.hide();
+      void Bridge.openSettingsWindow("models");
+    });
+    const fresh = h("button", { class: "b-ai-new", title: tl("New conversation") }, svg(ICONS.plus, 12, { stroke: 2 })) as HTMLButtonElement;
+    fresh.addEventListener("click", () => {
+      if (this.aiChats.get(provider)?.run != null) return;
+      this.aiChats.delete(provider);
+      this.drawer.render();
+      input.focus();
+    });
+    const send = h("button", { class: "b-send", title: tl("Send") }, svg(ICONS.arrowUp, 11, { stroke: 2.4 }));
+    send.addEventListener("click", () => this.sendAi(provider));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        this.sendAi(provider);
+      }
+    });
+    const pane = h("div", { class: "b-drawer-pane" },
+      h("div", { class: "b-ai-head" }, model, h("span", { class: "b-drawer-gap" }), fresh),
+      log,
+      h("div", { class: "b-composer" }, input, send));
+    const parts = { pane, log, input, model, fresh };
+    this.aiPanes.set(provider, parts);
+    return parts;
+  }
+
+  /** An other model's tab as it stands: its conversation, or what it is for, or that it isn't set up. */
+  private aiView(provider: string): HTMLElement {
+    const p = this.aiPane(provider);
+    const ready = readyProviders(State.settings, this.otherKeys).find((r) => r.def.id === provider);
+    const chat = this.aiChats.get(provider);
+    const name = otherName(provider);
+    p.model.textContent = ready?.model ?? chat?.other?.model ?? "";
+    p.model.style.display = p.model.textContent ? "" : "none";
+    p.fresh.disabled = !chat?.lines.length || chat.run != null;
+    clear(p.log);
+    if (!ready) {
+      p.log.append(h("div", { class: "b-hint", text: t("{name} isn't set up yet: see Settings → AI models.", { name }) }));
+    } else if (!chat?.lines.length) {
+      p.log.append(h("div", { class: "b-hint", text: t("Chat with {name}: it only answers what you write here, with no tools and nothing from your projects.", { name }) }));
+    }
+    for (const line of chat?.lines ?? []) p.log.append(lineView(line, chat!.project.path));
+    if (chat?.run != null) p.log.append(h("div", { class: "chat-row" }, h("div", { class: "typing" }, h("i"), h("i"), h("i"))));
+    p.input.placeholder = t("Ask {name}…", { name });
+    p.input.disabled = !ready;
+    requestAnimationFrame(() => (p.log.scrollTop = p.log.scrollHeight));
+    return p.pane;
+  }
+
+  /** What was typed in an other model's tab: the next turn of its chat (startOther), once the last is answered. */
+  private sendAi(provider: string) {
+    const p = this.aiPane(provider);
+    const text = p.input.value.trim();
+    const ready = readyProviders(State.settings, this.otherKeys).find((r) => r.def.id === provider);
+    let chat = this.aiChats.get(provider);
+    if (!text || !ready || chat?.run != null) return;
+    if (!chat) {
+      chat = { ...makeChat(this.project ?? NO_PROJECT, null, otherName(provider)), side: true };
+      this.aiChats.set(provider, chat);
+    }
+    // The model Settings has for it now, even mid-conversation.
+    chat.other = { provider, model: ready.model };
+    chat.lines.push(userLine(text, []));
+    p.input.value = "";
+    Sound.play("send");
+    void this.startOther(chat);
   }
 
   /** A conversation with another model, on its project's list. */
@@ -1792,7 +2058,7 @@ export class Buddy {
       s.id, s.title, s.prompt, ago(s.last), this.working(this.project?.path ?? "", s.id), this.notices.get(s.id)?.kind ?? null,
     ]);
     const others = this.others.get(this.project?.path ?? "")?.map((c) => [c.title, c.run != null, c.lines.length]);
-    keyed(body, [this.notice, this.project?.path, sessions ?? null, this.renaming, others ?? null], () => this.buildList());
+    keyed(body, [this.notice, this.project?.path, sessions ?? null, this.renaming, others ?? null, this.waitingCommand()], () => this.buildList());
   }
 
   /** The picked project's sessions, or why there are none. */
@@ -1801,7 +2067,9 @@ export class Buddy {
     clear(body);
     if (this.notice) body.append(h("div", { class: "b-error", text: this.notice }));
     if (!this.project) {
-      body.append(h("div", { class: "b-hint", text: t("Pick a project") }));
+      // A command from Settings waits in the field for a project to run in.
+      const command = this.waitingCommand();
+      body.append(h("div", { class: "b-hint", text: command ? t("Pick a project to run {command} in.", { command }) : t("Pick a project") }));
     } else if (this.sessions == null) {
       body.append(h("div", { class: "b-hint", text: t("Loading…") }));
     } else if (!this.sessions.length && !this.others.get(this.project.path)?.length) {
@@ -1982,8 +2250,8 @@ export class Buddy {
   private renderAttachments() {
     // Shown with or without a project: files dropped on Buddybara before one is
     // picked are there, waiting, and so is the reason one was refused.
-    this.files.classList.toggle("open", this.attachments.length > 0 || this.copying.length > 0 || this.attachError !== "");
-    keyed(this.files, [this.attachments.map((f) => f.path), this.copying, this.attachError], () => {
+    this.files.classList.toggle("open", this.attachments.length > 0 || this.copying.length > 0 || this.attachError !== "" || this.note !== "");
+    keyed(this.files, [this.attachments.map((f) => f.path), this.copying, this.attachError, this.note], () => {
       clear(this.files);
       for (const f of this.attachments) {
         const remove = h("button", { class: "b-file-x", title: t("Remove") }, svg(ICONS.xmark, 8, { stroke: 2.6 }));
@@ -2001,6 +2269,7 @@ export class Buddy {
         this.files.append(chip);
       }
       if (this.attachError) this.files.append(h("span", { class: "b-attach-error", text: this.attachError }));
+      if (this.note) this.files.append(h("span", { class: "b-attach-note", text: this.note }));
     });
   }
 
@@ -2016,6 +2285,330 @@ export class Buddy {
     });
     this.sendBtn.title = stop ? t("Stop Claude") : t("Send");
     this.sendBtn.classList.toggle("stop", stop);
+    this.renderSlash();
+  }
+
+  // ── The panel's own commands ────────────────────────────────────────────────
+
+  private clearInput() {
+    this.input.value = "";
+    this.fitInput();
+    this.renderComposer();
+  }
+
+  /**
+   * A command the panel answers itself (commands.ts panelCommand): what
+   * Claude Code does with it in its terminal, done with what the panel has.
+   */
+  private async runCommand(c: PanelCommand) {
+    this.attachError = "";
+    const project = this.chat?.project ?? this.project;
+    if (c.page) {
+      // Settings is a window of its own: the panel folds out of its way.
+      this.hide();
+      void Bridge.openSettingsWindow(c.page);
+      return;
+    }
+    switch (c.name) {
+      case "clear":
+        this.newChat();
+        break;
+      case "model": {
+        // A model named: picked at once; none, or one the menu doesn't have: the menu.
+        const id = c.arg ? pickModel(c.arg, MODELS) : undefined;
+        if (id === undefined) this.openMenu();
+        else {
+          this.model = id;
+          store("model", id);
+          this.pickOther(null);
+          Sound.play("blip");
+        }
+        break;
+      }
+      case "effort": {
+        const level = c.arg ? pickEffort(c.arg, EFFORTS.map((e) => e.id)) : undefined;
+        if (level === undefined) this.openMenu();
+        else {
+          this.effort = level;
+          store("effort", level);
+          Sound.play("blip");
+        }
+        break;
+      }
+      case "plan":
+        this.mode = "plan";
+        store("mode", "plan");
+        Sound.play("blip");
+        break;
+      case "usage":
+        this.showUsage();
+        break;
+      case "resume":
+        if (project) await this.resume(project, c.arg);
+        break;
+      case "copy":
+        await this.copyAnswer(c.arg);
+        break;
+      case "memory":
+        if (project) await Bridge.codeMemory(project.path).catch((err) => (this.attachError = errorText(err)));
+        break;
+      case "login":
+      case "logout":
+        // Claude Code's own, in a window of its own (setup.rs); the browser for a sign-in.
+        await Bridge.setupStart(c.name).catch((err) => (this.attachError = errorText(err)));
+        break;
+    }
+    this.render();
+  }
+
+  private openMenu() {
+    this.menuOpen = true;
+    this.confirming = false;
+  }
+
+  /**
+   * /usage: Settings → Claude Code, whose Usage shows the plan's limits and
+   * this conversation's totals (the project's newest, from its list).
+   */
+  private showUsage() {
+    const project = this.chat?.project.path ?? this.project?.path ?? null;
+    const session = this.chat?.other ? null : this.chat?.id ?? null;
+    this.hide();
+    void Bridge.openSettingsUsage(project, session);
+  }
+
+  /** /resume: back to the project's conversations, or straight into the one named. */
+  private async resume(project: CodeProject, name: string) {
+    if (name) {
+      const sessions = this.project === project && this.sessions
+        ? this.sessions
+        : await Bridge.codeSessions(project.path).catch((): CodeSession[] => []);
+      const found = findSession(sessions, name);
+      if (found) return this.openSession(project, found.id, found.title);
+    }
+    this.project = project;
+    this.leaveChat();
+  }
+
+  /** /copy [N]: Claude's last answer (or the Nth from the end) on the clipboard, as Markdown. */
+  private async copyAnswer(arg: string) {
+    const text = this.chat ? answerToCopy(this.chat.lines, arg) : null;
+    if (text == null) {
+      this.attachError = t("No answer to copy yet.");
+      return;
+    }
+    await writeClipboard(text);
+    this.flashNote(t("Copied"));
+  }
+
+  /** A word under the field for a moment ("Copied"). */
+  private flashNote(text: string) {
+    this.note = text;
+    window.clearTimeout(this.noteTimer);
+    this.noteTimer = window.setTimeout(() => {
+      this.note = "";
+      this.renderAttachments();
+    }, 2000);
+    this.renderAttachments();
+  }
+
+  /** Renamed by Claude Code (/rename): the list says it too. */
+  private titled(chat: Chat) {
+    const s = this.sessions?.find((x) => x.id === chat.id);
+    if (s) s.title = chat.title;
+    if (this.project?.path === chat.project.path) this.refreshSessions();
+  }
+
+  /**
+   * Settings → Skills → Use: the panel opens with the command typed before
+   * whatever was being written, ready for what follows it. Not sent.
+   */
+  useCommand(text: string) {
+    const name = /^\/(\S+)/.exec(text.trim())?.[1];
+    if (!name) return;
+    if (this.minimized) this.summon();
+    this.leaveTerminal();
+    this.services = false;
+    // Another model can't run Claude Code's commands: back to the project's list.
+    if (this.chat?.other) this.chat = null;
+    this.input.value = withCommand(this.input.value.trim(), name);
+    this.show(false);
+    this.fitInput();
+    // After show's own focus: the caret right after the command.
+    window.setTimeout(() => {
+      if (!this.shown) return;
+      this.input.focus();
+      const at = name.length + 2;
+      this.input.setSelectionRange(at, at);
+      this.renderComposer();
+    }, 90);
+  }
+
+  /** The command waiting in the field while no project is picked (useCommand), or "". */
+  private waitingCommand(): string {
+    return this.project ? "" : /^\/\S+/.exec(this.input.value.trim())?.[0] ?? "";
+  }
+
+  // ── The / menu ──────────────────────────────────────────────────────────────
+
+  /**
+   * The menu over the field while its first word is a command being typed:
+   * Claude Code's commands, skills and plugins' for this project (and /btw),
+   * those that match first. Not for a conversation with another model.
+   */
+  private renderSlash() {
+    this.renderGhost();
+    const project = this.project?.path;
+    const value = this.input.value;
+    if (value !== this.slashDismissed) this.slashDismissed = null;
+    const other = this.chat?.other ?? (this.chat?.id ? null : this.otherReady());
+    const query = project && !other && this.slashDismissed == null && document.activeElement === this.input
+      ? slashQuery(value, this.input.selectionStart ?? 0)
+      : null;
+    if (query == null || !project) return this.closeSlash();
+    this.askCommands(project);
+    const list = this.commands.get(project)?.list ?? null;
+    const rows = matchCommands(menuCommands(list ?? []), query);
+    if (!rows.length && list) return this.closeSlash();
+    if (query !== this.slashFor) {
+      this.slashFor = query;
+      this.slashAt = 0;
+    }
+    this.slashAt = Math.max(0, Math.min(this.slashAt, rows.length - 1));
+    this.slashRows = rows;
+    keyed(this.slash, [rows.map((r) => r.name), this.slashAt, list == null], () => {
+      clear(this.slash);
+      let group: CommandGroup | null = null;
+      rows.forEach((c, i) => {
+        if (c.group !== group) {
+          group = c.group;
+          this.slash.append(h("div", { class: "b-slash-head", text: t(GROUP_NAMES[group]) }));
+        }
+        const row = h(
+          "button",
+          { class: i === this.slashAt ? "b-slash-item on" : "b-slash-item", title: c.description },
+          h("span", { class: "b-slash-name", text: `/${c.name}` }),
+          h("span", { class: "b-slash-hint", text: c.hint }),
+          c.description ? h("span", { class: "b-slash-about", text: c.description }) : null,
+        );
+        row.addEventListener("click", () => this.pickSlash(c));
+        this.slash.append(row);
+      });
+      // The first time in a project, Claude Code takes a second or two to list them.
+      if (list == null) this.slash.append(h("div", { class: "b-slash-wait", text: t("Loading…") }));
+    });
+    this.slash.classList.add("open");
+    // The picked row in sight, scrolling the menu only (scrollIntoView would move the panel too).
+    const on = this.slash.querySelector<HTMLElement>(".b-slash-item.on");
+    if (on) {
+      const view = this.slash;
+      if (on.offsetTop < view.scrollTop) view.scrollTop = on.offsetTop - 30;
+      else if (on.offsetTop + on.offsetHeight > view.scrollTop + view.clientHeight) {
+        view.scrollTop = on.offsetTop + on.offsetHeight - view.clientHeight + 4;
+      }
+    }
+  }
+
+  private closeSlash() {
+    this.slash.classList.remove("open");
+    this.slashRows = [];
+    this.slashFor = null;
+  }
+
+  /**
+   * A command typed alone with its space (`/compact `): what it takes after
+   * it, greyed where that would go, until something is typed there. Not in a
+   * right-to-left field, where the command's place moves with the text.
+   */
+  private renderGhost() {
+    const project = this.project?.path;
+    const other = this.chat?.other ?? (this.chat?.id ? null : this.otherReady());
+    const list = project ? this.commands.get(project)?.list ?? [] : [];
+    const hint = project && !other && document.activeElement === this.input
+      ? pendingHint(this.input.value, menuCommands(list))
+      : "";
+    const hide = () => this.ghost.classList.remove("open");
+    if (!hint) return hide();
+    const style = getComputedStyle(this.input);
+    if (style.direction === "rtl") return hide();
+    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const ctx = measurer.getContext("2d");
+    if (!ctx) return hide();
+    ctx.font = font;
+    const input = this.input;
+    const left = input.offsetLeft + input.clientLeft + parseFloat(style.paddingLeft) + ctx.measureText(input.value).width;
+    const right = input.offsetLeft + input.clientLeft + input.clientWidth - parseFloat(style.paddingRight);
+    // No room left on the line: no hint.
+    if (right - left < 24) return hide();
+    this.ghost.textContent = hint;
+    Object.assign(this.ghost.style, {
+      font,
+      lineHeight: style.lineHeight,
+      left: `${left}px`,
+      top: `${input.offsetTop + input.clientTop + parseFloat(style.paddingTop)}px`,
+      maxWidth: `${right - left}px`,
+    });
+    this.ghost.classList.add("open");
+  }
+
+  /** The menu's keys: arrows to move, Tab or Enter to pick, Escape to put it away. True when it took the key. */
+  private slashKey(e: KeyboardEvent): boolean {
+    if (!this.slash.classList.contains("open") || e.isComposing) return false;
+    const rows = this.slashRows;
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && rows.length) {
+      e.preventDefault();
+      this.slashAt = (this.slashAt + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+      this.renderSlash();
+      return true;
+    }
+    if (e.key === "Escape") {
+      // The panel stays open: only the menu goes.
+      e.preventDefault();
+      e.stopPropagation();
+      this.slashDismissed = this.input.value;
+      this.closeSlash();
+      return true;
+    }
+    const picked = rows[this.slashAt];
+    if (!picked || !(e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) return false;
+    // Typed out in full already: Enter sends it as it is.
+    if (e.key === "Enter" && this.input.value.trim().toLowerCase() === `/${picked.name.toLowerCase()}`) return false;
+    e.preventDefault();
+    this.pickSlash(picked);
+    return true;
+  }
+
+  /** The command into the field, the caret after it for its arguments. */
+  private pickSlash(c: MenuCommand) {
+    this.input.value = withCommand(this.input.value, c.name);
+    this.input.focus();
+    this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+    this.fitInput();
+    this.renderComposer();
+  }
+
+  /** A project's commands, asked of Claude Code when the menu first opens there, and again once stale. */
+  private askCommands(project: string) {
+    const known = this.commands.get(project);
+    if (known && (known.asking || Date.now() - known.at < COMMANDS_FRESH_MS)) return;
+    const entry = { list: known?.list ?? null, at: known?.at ?? 0, asking: true };
+    this.commands.set(project, entry);
+    Bridge.codeCommands(project)
+      .then(
+        (list) => {
+          entry.list = list;
+        },
+        (err) => {
+          // Only /btw then; asked again once this is stale.
+          entry.list ??= [];
+          void Bridge.log(`buddy: commands failed: ${errorText(err)}`);
+        },
+      )
+      .finally(() => {
+        entry.at = Date.now();
+        entry.asking = false;
+        this.renderSlash();
+      });
   }
 
   /** The text field grows with what is typed, up to a few lines. */

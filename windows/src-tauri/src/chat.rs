@@ -81,12 +81,21 @@ pub async fn chat_models(app: AppHandle, provider: String) -> Result<Vec<ModelIn
 /// server streams it: `chat-delta` events carry the text so far for `run`.
 #[tauri::command]
 pub async fn chat_send(app: AppHandle, provider: String, model: String, turns: Vec<Turn>, run: u64) -> Result<String, String> {
-    let turns = conversation(turns)?;
-    if let Some(p) = openai_compat::provider(&provider) {
-        return openai_compat::send(p, &model, SYSTEM_PROMPT, &turns).await;
+    let answer = answer(&app, &provider, &model, turns, run).await;
+    // Why it failed, in Buddybara's log too (never what was said).
+    if let Err(err) = &answer {
+        crate::log::line(format!("chat {provider} {model} failed: {err}"));
     }
-    if let Some(server) = local_chat::server(&settings(&app), &provider) {
-        return local_chat::send(&server, &model, SYSTEM_PROMPT, &turns, |text| {
+    answer
+}
+
+async fn answer(app: &AppHandle, provider: &str, model: &str, turns: Vec<Turn>, run: u64) -> Result<String, String> {
+    let turns = conversation(turns)?;
+    if let Some(p) = openai_compat::provider(provider) {
+        return openai_compat::send(p, model, SYSTEM_PROMPT, &turns).await;
+    }
+    if let Some(server) = local_chat::server(&settings(app), provider) {
+        return local_chat::send(&server, model, SYSTEM_PROMPT, &turns, |text| {
             let _ = app.emit_to(WINDOW_LABEL, "chat-delta", Delta { run, text });
         })
         .await;

@@ -1,10 +1,12 @@
 // Settings → Skills and Plugins: the most used of Anthropic's Directory (what
 // claude.ai/customize shows), fifteen per department (directory.rs), each with
 // Install / Uninstall for Claude Code, and Get more for the rest on claude.ai.
+// Both start with what is installed and Add (addons.ts).
 
 import { Bridge, type DirCategory, type DirEntry, type DirKind } from "../core/bridge";
 import { clear, h, svg } from "../views/dom";
 import { N_, t } from "../i18n/i18n";
+import { installedChanged, installedPlugins, installedSkills, toolArea } from "./addons";
 import { markTile, searchBox } from "./parts";
 
 /** The Directory's departments (its `work_department`), as claude.ai names them. */
@@ -85,6 +87,7 @@ function card(e: DirEntry, redraw: () => void): HTMLElement {
     try {
       await (e.installed ? Bridge.pluginUninstall(e.id) : Bridge.pluginInstall(e.id));
       e.installed = !e.installed;
+      installedChanged();
     } catch (err) {
       errors.set(e.id, errorText(err));
     }
@@ -168,6 +171,7 @@ function searchResults(kind: DirKind, query: string, into: HTMLElement) {
 
 export function directoryPage(kind: DirKind): HTMLElement {
   const def = PAGE[kind];
+  const mine = h("div", { class: "page-sections" });
   const list = h("div", { class: "page-sections" });
   const fill = (cats: DirCategory[]) => {
     if (queries.get(kind)) return;
@@ -177,6 +181,7 @@ export function directoryPage(kind: DirKind): HTMLElement {
   // The departments, or the results of what the search field holds.
   const show = (query: string) => {
     queries.set(kind, query);
+    mine.replaceChildren(toolArea(), kind === "skills" ? installedSkills(query) : installedPlugins(query));
     clear(list);
     if (query) return searchResults(kind, query, list);
     const known = categories.get(kind);
@@ -198,6 +203,7 @@ export function directoryPage(kind: DirKind): HTMLElement {
       getMore(def.more, t("Get more on claude.ai")),
     ),
     searchBox(t(def.search), queries.get(kind) ?? "", show),
+    mine,
     list,
   );
   show(queries.get(kind) ?? "");

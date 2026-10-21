@@ -100,7 +100,11 @@ fn reply_text(p: &Provider, response: &Value) -> Result<String, String> {
     Err(t("No response text."))
 }
 
-fn status_error(p: &Provider, status: u16, detail: &str) -> String {
+/// What an error answer means, from its status and its body. A 429 is either
+/// too many requests or no quota at all: OpenAI tells them apart by its code.
+fn status_error(p: &Provider, status: u16, body: &[u8]) -> String {
+    let detail = net::error_detail(body);
+    let detail = detail.as_str();
     match status {
         401 | 403 => tf(
             "{name} rejected the API key ({status}). Check it in Settings.",
@@ -111,7 +115,15 @@ fn status_error(p: &Provider, status: u16, detail: &str) -> String {
             "{name}: model not found (404). Pick another one in Settings → AI models. {detail}",
             &[("name", p.name), ("detail", detail)],
         ),
-        429 => tf("{name} rate limit reached (429): {detail}", &[("name", p.name), ("detail", detail)]),
+        // A key with no credits or budget, whatever ChatGPT allows: the API is billed on its own.
+        429 if net::error_code(body).as_deref() == Some("insufficient_quota") => match p.id {
+            "openai" => tf(
+                "{name}: this key has no API quota (429). The API is billed apart from ChatGPT: its organization needs credits or a budget on platform.openai.com.",
+                &[("name", p.name)],
+            ),
+            _ => tf("{name}: this key has no API quota (429). {detail}", &[("name", p.name), ("detail", detail)]),
+        },
+        429 => tf("{name}: rate limit or quota reached (429): {detail}", &[("name", p.name), ("detail", detail)]),
         _ => format!("{} {status}: {detail}", p.name),
     }
 }
@@ -133,7 +145,7 @@ pub async fn send(p: &'static Provider, model: &str, system: &str, turns: &[Valu
     let status = response.status();
     if !status.is_success() {
         let body = net::read_capped(response, net::MAX_ERROR_BODY).await.unwrap_or_default();
-        return Err(status_error(p, status.as_u16(), &net::error_detail(&body)));
+        return Err(status_error(p, status.as_u16(), &body));
     }
     let bytes = net::read_capped(response, net::MAX_BODY).await?;
     let json: Value = serde_json::from_slice(&bytes).map_err(|e| tf("Bad API response: {error}", &[("error", &e.to_string())]))?;
@@ -152,7 +164,7 @@ pub async fn models(p: &Provider, key: &str) -> Result<Vec<ModelInfo>, String> {
     let status = response.status();
     if !status.is_success() {
         let body = net::read_capped(response, net::MAX_ERROR_BODY).await.unwrap_or_default();
-        return Err(status_error(p, status.as_u16(), &net::error_detail(&body)));
+        return Err(status_error(p, status.as_u16(), &body));
     }
     let bytes = net::read_capped(response, net::MAX_BODY).await?;
     let json: Value = serde_json::from_slice(&bytes).map_err(|_| t("Unexpected API response."))?;
@@ -211,6 +223,19 @@ mod tests {
 
     fn p(id: &str) -> &'static Provider {
         provider(id).unwrap()
+    }
+
+    #[test]
+    fn a_key_without_quota_is_not_called_a_rate_limit() {
+        let quota = br#"{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}"#;
+        let openai = status_error(p("openai"), 429, quota);
+        assert!(openai.contains("no API quota") && openai.contains("ChatGPT"), "{openai}");
+        let other = status_error(p("openrouter"), 429, quota);
+        assert!(other.contains("no API quota") && other.contains("You exceeded your current quota"), "{other}");
+        let busy = br#"{"error":{"message":"Rate limit reached for requests per min.","type":"requests","code":"rate_limit_exceeded"}}"#;
+        let limit = status_error(p("openai"), 429, busy);
+        assert!(limit.contains("rate limit or quota reached") && limit.contains("requests per min"), "{limit}");
+        assert_eq!(crate::net::error_code(b"not json"), None);
     }
 
     #[test]

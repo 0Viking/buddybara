@@ -13,7 +13,9 @@ import { connectorsPage } from "./connectors";
 import { INTEGRATION_KEYS, integrationsPage } from "./integrations";
 import { MODEL_KEYS, modelsPage } from "./models";
 import { directoryPage } from "./directory";
+import { addonsDragging, addonsDropped } from "./addons";
 import { customizePage } from "./customize";
+import { usageCard, type UsageTarget } from "./usage";
 import { applyTextSize, applyTheme } from "../core/theme";
 import { loadSkin } from "../buddybara/skin";
 import {
@@ -285,7 +287,8 @@ const PLAN_SETTINGS_TEXT = {
   get oldRelay() { return t("The status line relay is no longer needed: the usage now comes from your account."); },
 };
 
-function planCard(status: HookStatus): HTMLElement {
+/** `changed`: the switch moved (Usage above shows the plan's limits only while it is on). */
+function planCard(status: HookStatus, changed: () => void): HTMLElement {
   const body = h("div", {});
   const redraw = () => {
     clear(body);
@@ -302,6 +305,7 @@ function planCard(status: HookStatus): HTMLElement {
     const sw = toggle(settings.showPlanInNotch, (on) => {
       settings.showPlanInNotch = on;
       void save();
+      changed();
     });
     body.append(srow(PLAN_SETTINGS_TEXT.showClaude, PLAN_SETTINGS_TEXT.claude, sw));
     if (status.planRelayInstalled) {
@@ -322,8 +326,12 @@ function planCard(status: HookStatus): HTMLElement {
   return cardOf(h("h2", {}, h("span", { text: t("Plan usage") })), body);
 }
 
+/** Whose totals Usage shows: the conversation the panel's /usage was typed in, else the newest. */
+let usageFor: UsageTarget = { project: null, session: null };
+
 function claudePage(status: HookStatus): HTMLElement {
-  return pageOf("Claude Code", null, hooksCard(status), planCard(status));
+  const usage = usageCard(usageFor, () => settings.showPlanInNotch);
+  return pageOf("Claude Code", null, usage.el, hooksCard(status), planCard(status, usage.planChanged));
 }
 
 // ── General page ──────────────────────────────────────────────────────────────
@@ -403,6 +411,8 @@ function sidebar(): HTMLElement {
       onclick: () => {
         if (p.id === page) return;
         page = p.id;
+        // Opened from here, Usage shows the newest conversation.
+        usageFor = { project: null, session: null };
         void rerender(false);
       },
     }, svg(p.icon, 18, { stroke: 1.9 }), t(p.label))),
@@ -490,6 +500,27 @@ async function main() {
   void onEvent<string>("settings-page", (p) => {
     if (p === page || !PAGES.some((x) => x.id === p)) return;
     page = p as PageId;
+    void rerender(false);
+  });
+  // A file dragged over the window, then dropped: Skills → Add takes it (addons.ts).
+  const toAdd = () => {
+    if (page === "skills" || page === "plugins") return;
+    page = "skills";
+    void rerender(false);
+  };
+  void onEvent<boolean>("settings-drag", (on) => {
+    addonsDragging(on);
+    if (on) toAdd();
+  });
+  void onEvent<string[]>("settings-drop", (paths) => {
+    if (!paths[0]) return;
+    addonsDropped(paths[0]);
+    toAdd();
+  });
+  // The panel's /usage: this page, its Usage on the conversation it was typed in.
+  void onEvent<UsageTarget>("settings-usage", (target) => {
+    usageFor = { project: target.project ?? null, session: target.session ?? null };
+    page = "claude";
     void rerender(false);
   });
 }

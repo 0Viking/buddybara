@@ -324,6 +324,24 @@ button.danger:hover:not(:disabled) {
   border-color: rgba(255, 107, 107, 0.4);
 }
 
+/* A link inside a line of text (models.ts keyHint: where a key is made). */
+button.link,
+button.link:hover:not(:disabled),
+button.link:active:not(:disabled) {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mikan);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transform: none;
+}
+
+button.link:hover:not(:disabled) {
+  text-decoration-thickness: 2px;
+}
+
 button.icon {
   display: inline-flex;
   align-items: center;
@@ -836,6 +854,293 @@ html[dir="rtl"] .stack.svc-keys {
   flex: none;
   padding: 5px 11px;
   font-size: calc(11.5px * var(--text, 1));
+}
+
+/* ── Claude Code → Usage (usage.ts) ─────────────────────────────────────────── */
+
+.usage-part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-part + .usage-part {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* "Plan usage", or the conversation's name and its project's. */
+.usage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.usage-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-head small {
+  flex: none;
+  color: var(--dim);
+  font-weight: 600;
+  font-size: calc(12px * var(--text, 1));
+}
+
+.usage-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--dim);
+}
+
+.usage-stat b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The plan's bars, as the panel draws them (buddy/usage.ts planRows). */
+.usage-card .b-use-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: calc(12.5px * var(--text, 1));
+}
+
+.usage-card .b-use-head span:last-child {
+  color: var(--dim);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.usage-card .b-use-bar {
+  height: 6px;
+  margin: 6px 0 4px;
+  border-radius: calc(3px * var(--round));
+  background: var(--line);
+  overflow: hidden;
+}
+
+.usage-card .b-use-bar i {
+  display: block;
+  height: 100%;
+  border-radius: calc(3px * var(--round));
+  background: var(--amber);
+}
+
+.usage-card .b-use-bar.high i {
+  background: var(--red);
+}
+
+.usage-card .b-use-when {
+  color: var(--dim);
+  font-size: calc(11.5px * var(--text, 1));
+}
+
+/* ── Skills and Plugins: Installed, Add, New skill (addons.ts) ───────────────── */
+
+.group-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dir-card.off {
+  opacity: 0.6;
+}
+
+.addon-area {
+  scroll-margin-top: 12px;
+}
+
+.addon-card > h2 .grow {
+  flex: 1 1 auto;
+}
+
+.addon-x,
+.addon-x:hover:not(:disabled) {
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: calc(18px * var(--text, 1));
+  line-height: 1;
+}
+
+.addon-x:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+/* Where a file or a folder is dropped; it lights up while one is dragged over the window. */
+.addon-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 16px;
+  border: 1.5px dashed var(--line-2);
+  border-radius: calc(14px * var(--round));
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.addon-drop span {
+  max-width: 520px;
+  color: var(--dim);
+  font-size: calc(12.5px * var(--text, 1));
+}
+
+.addon-drop.on {
+  border-color: var(--mikan);
+  background: color-mix(in srgb, var(--mikan) 8%, transparent);
+}
+
+.addon-link input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.addon-busy {
+  padding: 8px 0;
+}
+
+.addon-title {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.addon-title b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(14px * var(--text, 1));
+}
+
+.addon-kind {
+  flex: none;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
+  color: var(--dim);
+  font-size: calc(10.5px * var(--text, 1));
+  font-weight: 800;
+}
+
+.addon-kind.ok {
+  background: rgba(95, 211, 138, 0.14);
+  color: var(--leaf);
+}
+
+.addon-about {
+  color: var(--dim);
+  font-size: calc(12.5px * var(--text, 1));
+}
+
+.addon-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.addon-label {
+  color: var(--dim);
+  font-size: calc(12px * var(--text, 1));
+  font-weight: 700;
+}
+
+.addon-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.addon-row code,
+.addon-chips code,
+.addon-runs code {
+  font: 500 calc(11.5px * var(--text, 1)) var(--mono);
+}
+
+.addon-row code,
+.addon-chips code {
+  padding: 1px 7px;
+  border-radius: calc(6px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(7% * var(--lines)), transparent);
+}
+
+.addon-runs {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+}
+
+.addon-runs li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+/* Errors and checks keep their lines. */
+.addon-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.addon-tick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(12.5px * var(--text, 1));
+  cursor: pointer;
+}
+
+.addon-tick input {
+  accent-color: var(--mikan);
+}
+
+/* A marketplace's plugin, each with its own Install. */
+.addon-plugin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: calc(12px * var(--round));
+}
+
+.addon-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.addon-field textarea {
+  resize: vertical;
+  min-height: 140px;
+  font: 400 calc(13px * var(--text, 1))/1.5 var(--font);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: calc(10px * var(--round));
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
+.addon-field textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--mikan) 60%, transparent);
+}
+
+/* What an installed command takes after its name (addons.ts skillCard). */
+.dir-parts .dir-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 calc(10.5px * var(--text, 1)) var(--mono);
 }
 
 /* Arabic: the window reads right to left (main.ts sets <html dir="rtl">);

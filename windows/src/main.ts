@@ -70,6 +70,8 @@ async function startBuddy(root: HTMLElement) {
       }
     });
     await onEvent<null>("screen-changed", () => void Bridge.reposition());
+    // Settings → Skills → Use: the panel opens with that command typed.
+    await onEvent<string>("panel-use", (text) => buddy.useCommand(text));
     await onEvent<Settings>("settings-changed", (s) => {
       const planWasOn = State.settings.showPlanInNotch;
       const foldersWere = State.settings.allSessionFolders;

@@ -14,24 +14,27 @@ export interface ProviderDef {
   /** Credential Manager entry of its key; null for the model servers. */
   key: string | null;
   placeholder: string;
-  /** Where its key is made. */
+  /** Where its key is made: the site as shown, and its API keys page. */
   site: string;
+  keyUrl: string;
   /** Settings field holding a model server's address. */
   urlField: "ollamaUrl" | "lmstudioUrl" | "customUrl" | null;
   /** A model server's usual address on this computer ("" for none). */
   usual: string;
   /** When the saved model is not offered, the first one containing this is picked. */
   prefer: string | null;
+  /** Its dot on the panel's drawer tabs (a black mark would vanish on a dark panel: green instead). */
+  color: string;
 }
 
 export const PROVIDERS: readonly ProviderDef[] = [
-  { id: "google", name: "Google AI", brand: "google", key: "google-api-key", placeholder: "AIza…", site: "aistudio.google.com", urlField: null, usual: "", prefer: "flash" },
-  { id: "openai", name: "OpenAI", brand: "openai", key: "openai-api-key", placeholder: "sk-…", site: "platform.openai.com", urlField: null, usual: "", prefer: "mini" },
-  { id: "openrouter", name: "OpenRouter", brand: "openrouter", key: "openrouter-api-key", placeholder: "sk-or-…", site: "openrouter.ai/keys", urlField: null, usual: "", prefer: null },
-  { id: "ollama", name: "Ollama", brand: "ollama", key: null, placeholder: "", site: "", urlField: "ollamaUrl", usual: "http://127.0.0.1:11434", prefer: null },
-  { id: "lmstudio", name: "LM Studio", brand: "lmstudio", key: null, placeholder: "", site: "", urlField: "lmstudioUrl", usual: "http://127.0.0.1:1234", prefer: null },
+  { id: "google", name: "Google AI", brand: "google", key: "google-api-key", placeholder: "AIza…", site: "aistudio.google.com", keyUrl: "https://aistudio.google.com/apikey", urlField: null, usual: "", prefer: "flash", color: "#8E75B2" },
+  { id: "openai", name: "OpenAI", brand: "openai", key: "openai-api-key", placeholder: "sk-…", site: "platform.openai.com", keyUrl: "https://platform.openai.com/api-keys", urlField: null, usual: "", prefer: "mini", color: "#10A37F" },
+  { id: "openrouter", name: "OpenRouter", brand: "openrouter", key: "openrouter-api-key", placeholder: "sk-or-…", site: "openrouter.ai/keys", keyUrl: "https://openrouter.ai/keys", urlField: null, usual: "", prefer: null, color: "#94A3B8" },
+  { id: "ollama", name: "Ollama", brand: "ollama", key: null, placeholder: "", site: "", keyUrl: "", urlField: "ollamaUrl", usual: "http://127.0.0.1:11434", prefer: null, color: "var(--green)" },
+  { id: "lmstudio", name: "LM Studio", brand: "lmstudio", key: null, placeholder: "", site: "", keyUrl: "", urlField: "lmstudioUrl", usual: "http://127.0.0.1:1234", prefer: null, color: "var(--green)" },
   // No usual address: any server that speaks the OpenAI API.
-  { id: "custom", name: N_("OpenAI-compatible"), brand: "", key: null, placeholder: "", site: "", urlField: "customUrl", usual: "", prefer: null },
+  { id: "custom", name: N_("OpenAI-compatible"), brand: "", key: null, placeholder: "", site: "", keyUrl: "", urlField: "customUrl", usual: "", prefer: null, color: "var(--green)" },
 ];
 
 /** Credential Manager entry of the custom server's optional key (bound to its address). */

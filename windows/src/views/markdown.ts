@@ -1,7 +1,7 @@
 // Markdown in the chat's answers, as on the Mac (ChatMarkdown.swift and
 // ChatMarkdownView.swift): headings, paragraphs, fenced code with a copy button,
-// bullet and numbered lists, quotes and rules, with bold, italic, `code` and
-// links inside the text.
+// bullet and numbered lists, quotes, rules and tables (GitHub's: a header row,
+// then a |---| row), with bold, italic, `code` and links inside the text.
 //
 // Everything is built as DOM nodes with textContent, never as HTML, so nothing
 // a model writes can inject markup. A web link (http(s), as [text](url) or
@@ -28,12 +28,70 @@ export type Block =
   /** `prefix` is "•" or "1."; `indent` the nesting level, from 0. */
   | { kind: "item"; prefix: string; text: string; indent: number }
   | { kind: "quote"; text: string }
-  | { kind: "rule" };
+  | { kind: "rule" }
+  /** Cells are Markdown text, parsed inline when drawn; every row has the header's count. */
+  | { kind: "table"; align: Align[]; head: string[]; rows: string[][] };
+
+/** A table column's alignment, from its delimiter cell (`:--`, `--:`, `:-:`); null leaves it be. */
+export type Align = "left" | "center" | "right" | null;
 
 const isRule = (s: string) => s === "---" || s === "***" || s === "___";
 const isBullet = (s: string) => /^[-*+] /.test(s);
 const ordered = (s: string) => /^(\d+)\.\s+/.exec(s);
 const isQuote = (s: string) => s.startsWith("> ") || s === ">";
+const DELIMITER_CELL = /^:?-+:?$/;
+
+/**
+ * A table row's cells: split at its pipes, the outer ones dropped. A pipe
+ * escaped (`\|`) belongs to the cell, and so does one inside a `code span`
+ * (GitHub would split there; an answer meant the code).
+ */
+export function tableCells(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|") && !s.endsWith("\\|")) s = s.slice(0, -1);
+  const cells: string[] = [];
+  let cell = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\" && s[i + 1] === "|") {
+      cell += "|";
+      i++;
+    } else if (c === "`" && s.indexOf("`", i + 1) > i) {
+      const end = s.indexOf("`", i + 1);
+      cell += s.slice(i, end + 1).replace(/\\\|/g, "|");
+      i = end;
+    } else if (c === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += c;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+/** A delimiter row's alignments, or null for a line that isn't one. */
+function delimiterRow(line: string): Align[] | null {
+  const cells = tableCells(line);
+  if (!cells.every((c) => DELIMITER_CELL.test(c))) return null;
+  return cells.map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : null));
+}
+
+/** The table that starts at line `i`: a header row, then a delimiter row of as many cells, both with pipes. */
+function tableAt(lines: string[], i: number): { align: Align[]; head: string[] } | null {
+  const head = lines[i];
+  const next = lines[i + 1];
+  if (next == null || !head.includes("|") || !next.includes("|")) return null;
+  const align = delimiterRow(next);
+  if (!align) return null;
+  const cells = tableCells(head);
+  return cells.length === align.length ? { align, head: cells.map(cellText) } : null;
+}
+
+/** An answer's `<br>` in a cell is a line break there, not markup. */
+const cellText = (cell: string) => cell.replace(/<br\s*\/?>/gi, "\n");
 
 /** Same rules as the Mac's parser, line by line. */
 export function parseMarkdown(input: string): Block[] {
@@ -58,6 +116,20 @@ export function parseMarkdown(input: string): Block[] {
       const text = line.slice(hashes).trim();
       if (text) blocks.push({ kind: "heading", level: Math.min(hashes, 6), text });
       i++;
+      continue;
+    }
+
+    // A table runs until a blank line, or a line without a pipe.
+    const table = tableAt(lines, i);
+    if (table) {
+      const width = table.head.length;
+      const rows: string[][] = [];
+      for (i += 2; i < lines.length && lines[i].trim() && lines[i].includes("|") && !lines[i].startsWith("```"); i++) {
+        const cells = tableCells(lines[i]).map(cellText).slice(0, width);
+        while (cells.length < width) cells.push("");
+        rows.push(cells);
+      }
+      blocks.push({ kind: "table", align: table.align, head: table.head, rows });
       continue;
     }
 
@@ -95,7 +167,7 @@ export function parseMarkdown(input: string): Block[] {
     for (i++; i < lines.length; i++) {
       const next = lines[i];
       const s = next.trim();
-      if (!s || next.startsWith("#") || next.startsWith("```") || isQuote(s) || isBullet(s) || isRule(s) || ordered(s)) break;
+      if (!s || next.startsWith("#") || next.startsWith("```") || isQuote(s) || isBullet(s) || isRule(s) || ordered(s) || tableAt(lines, i)) break;
       para.push(next);
     }
     blocks.push({ kind: "paragraph", text: para.join("\n") });
@@ -323,7 +395,7 @@ function inline(text: string, into: HTMLElement) {
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
-async function writeClipboard(text: string) {
+export async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -383,6 +455,20 @@ function render(block: Block): HTMLElement {
     }
     case "rule":
       return h("hr", { class: "md-rule" });
+    case "table": {
+      const cell = (tag: "th" | "td", text: string, column: number) => {
+        const el = h(tag);
+        const align = block.align[column];
+        if (align) el.style.textAlign = align;
+        inline(text, el);
+        return el;
+      };
+      // Wrapped: a table wider than the panel scrolls sideways, the answer doesn't.
+      return h("div", { class: "md-table" },
+        h("table", {},
+          h("thead", {}, h("tr", {}, ...block.head.map((c, i) => cell("th", c, i)))),
+          h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((c, i) => cell("td", c, i)))))));
+    }
   }
 }
 

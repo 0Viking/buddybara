@@ -129,6 +129,13 @@ pub fn error_detail(body: &[u8]) -> String {
     text.trim().chars().take(200).collect()
 }
 
+/// The machine-readable reason of an error body, OpenAI's `error.code` (or
+/// `error.type`): `insufficient_quota`, `rate_limit_exceeded`…
+pub fn error_code(body: &[u8]) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(body).ok()?;
+    ["/error/code", "/error/type"].iter().find_map(|p| v.pointer(p).and_then(|c| c.as_str()).map(str::to_string))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

@@ -2,12 +2,17 @@
 // (the chat and its text box move into the top half), resized by their grip,
 // and a bar under the text box that brings them back. Terminal is Claude
 // Code's own screen (terminal.ts); btw holds side questions (buddy.ts askBtw),
-// each answered from a copy of the conversation that is never saved.
+// each answered from a copy of the conversation that is never saved. The
+// other models set up in Settings → AI models (OpenAI, Google AI,
+// OpenRouter, a model server) each open as a tab of their own too: a chat
+// with that model (buddy.ts aiView), kept while Buddybara runs.
 
 import { clear, h } from "../views/dom";
 import { t } from "../i18n/i18n";
+import { providerDef } from "../core/providers";
 
-export type DrawerTab = "btw" | "terminal";
+/** `ai:<provider>`: a chat with that other model (core/providers.ts ProviderId). */
+export type DrawerTab = "btw" | "terminal" | `ai:${string}`;
 
 export interface DrawerHost {
   /** The terminal's own element, kept in its tab. */
@@ -16,12 +21,32 @@ export interface DrawerHost {
   picked(tab: DrawerTab): void;
   /** A tab was closed. */
   closed(tab: DrawerTab): void;
+  /** The drawer slid down (its tabs stay). */
+  slid(): void;
   /** What the btw tab shows: the current conversation's side questions. */
   btwView(): HTMLElement;
+  /** The other models that can be chatted with now (a key, or a server, and a model). */
+  aiReady(): string[];
+  /** What an other model's tab shows. */
+  aiView(provider: string): HTMLElement;
 }
 
-const NAMES: Record<DrawerTab, string> = { btw: "btw", terminal: "Terminal" };
-const COLORS: Record<DrawerTab, string> = { btw: "var(--mikan)", terminal: "var(--dim)" };
+/** The provider of an other model's tab, or null for btw and the terminal. */
+export function aiProvider(tab: DrawerTab | null): string | null {
+  return tab?.startsWith("ai:") ? tab.slice(3) : null;
+}
+
+function tabName(tab: DrawerTab): string {
+  const provider = aiProvider(tab);
+  if (provider) return t(providerDef(provider)?.name ?? provider);
+  return tab === "btw" ? "btw" : "Terminal";
+}
+
+function tabColor(tab: DrawerTab): string {
+  const provider = aiProvider(tab);
+  if (provider) return providerDef(provider)?.color ?? "var(--green)";
+  return tab === "btw" ? "var(--mikan)" : "var(--dim)";
+}
 
 export class Drawer {
   readonly el = h("div", { class: "b-drawer" });
@@ -35,10 +60,11 @@ export class Drawer {
   private adding = false;
   private head = h("div", { class: "b-drawer-tabs" });
   private btwBox = h("div", { class: "b-drawer-btw" });
+  private aiBox = h("div", { class: "b-drawer-btw" });
 
   constructor(private main: HTMLElement, private host: DrawerHost) {
     this.bar.addEventListener("click", () => this.show(this.active ?? this.tabs[0] ?? "btw"));
-    const body = h("div", { class: "b-drawer-body" }, host.terminal, this.btwBox);
+    const body = h("div", { class: "b-drawer-body" }, host.terminal, this.btwBox, this.aiBox);
     this.el.append(this.grip(), this.head, body);
     this.render();
   }
@@ -62,6 +88,7 @@ export class Drawer {
     this.main.classList.remove("drawer-open");
     this.adding = false;
     this.render();
+    this.host.slid();
   }
 
   close(tab: DrawerTab) {
@@ -76,6 +103,12 @@ export class Drawer {
 
   has(tab: DrawerTab): boolean {
     return this.tabs.includes(tab);
+  }
+
+  /** The tabs the + menu offers: btw, the terminal, and each other model set up now, less those open. */
+  missing(): DrawerTab[] {
+    const all: DrawerTab[] = ["btw", "terminal", ...this.host.aiReady().map((p): DrawerTab => `ai:${p}`)];
+    return all.filter((tab) => !this.tabs.includes(tab));
   }
 
   /** The grip: dragged, the drawer takes 25–80 % of the column. */
@@ -102,12 +135,12 @@ export class Drawer {
 
   /** Redrawn with the panel: the btw tab follows the conversation. */
   render() {
-    const dot = (tab: DrawerTab) => h("i", { style: `background:${COLORS[tab]}` });
+    const dot = (tab: DrawerTab) => h("i", { style: `background:${tabColor(tab)}` });
     clear(this.bar);
     this.bar.append(
       h("span", { class: "b-tabsbar-up", text: "▴" }),
       ...(this.tabs.length
-        ? this.tabs.map((tab) => h("span", { class: "b-tabsbar-tab" }, dot(tab), NAMES[tab]))
+        ? this.tabs.map((tab) => h("span", { class: "b-tabsbar-tab" }, dot(tab), tabName(tab)))
         : [h("span", { text: "btw · Terminal" })]),
     );
 
@@ -121,9 +154,9 @@ export class Drawer {
       this.head.append(h("button", {
         class: tab === this.active ? "b-drawer-tab on" : "b-drawer-tab",
         onclick: () => this.show(tab),
-      }, dot(tab), NAMES[tab], x));
+      }, dot(tab), tabName(tab), x));
     }
-    const missing = (Object.keys(NAMES) as DrawerTab[]).filter((tab) => !this.tabs.includes(tab));
+    const missing = this.missing();
     if (missing.length) {
       this.head.append(h("button", { class: "b-drawer-add", text: "+", title: t("Open a tab"), onclick: () => {
         this.adding = !this.adding;
@@ -134,20 +167,21 @@ export class Drawer {
       h("span", { class: "b-drawer-gap" }),
       h("button", { class: "b-drawer-down", text: "▾", title: t("Slide down"), onclick: () => this.hide() }),
     );
-    if (this.adding) {
+    if (this.adding && missing.length) {
       this.head.append(h("div", { class: "b-drawer-menu" },
-        ...missing.map((tab) => h("button", { onclick: () => this.show(tab) }, dot(tab), NAMES[tab]))));
+        ...missing.map((tab) => h("button", { onclick: () => this.show(tab) }, dot(tab), tabName(tab)))));
     }
 
+    const provider = aiProvider(this.active);
     this.host.terminal.hidden = this.active !== "terminal";
     this.btwBox.hidden = this.active !== "btw";
-    if (this.active === "btw") {
-      // The same element each time: put back, its text box would lose the keyboard.
-      const view = this.host.btwView();
-      if (this.btwBox.firstChild !== view) {
-        clear(this.btwBox);
-        this.btwBox.append(view);
-      }
+    this.aiBox.hidden = provider == null;
+    // The same element each time: put back, its text box would lose the keyboard.
+    const view = this.active === "btw" ? this.host.btwView() : provider ? this.host.aiView(provider) : null;
+    const box = this.active === "btw" ? this.btwBox : this.aiBox;
+    if (view && box.firstChild !== view) {
+      clear(box);
+      box.append(view);
     }
   }
 }

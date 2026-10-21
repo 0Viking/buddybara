@@ -299,6 +299,17 @@ fn last_line(text: &str) -> Option<String> {
 /// `claude` with `args`, from the home folder, with no console window, given up
 /// after `limit`. Its output, or what it said went wrong.
 pub(crate) fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
+    let (ok, out, err) = claude_run(args, limit)?;
+    if ok {
+        Ok(out)
+    } else {
+        Err(last_line(&err).or_else(|| last_line(&out)).unwrap_or_else(|| t("Claude Code stopped with an error.")))
+    }
+}
+
+/// `claude` with `args` as `claude` runs it: whether it succeeded, and all it
+/// printed (stdout, stderr), for a caller that reads a failure's whole report.
+pub(crate) fn claude_run(args: &[&str], limit: Duration) -> Result<(bool, String, String), String> {
     let exe = crate::code::claude_exe().ok_or_else(|| t("Claude Code isn't installed: `claude` was not found."))?;
     let mut cmd = Command::new(exe);
     cmd.args(args)
@@ -322,11 +333,7 @@ pub(crate) fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
         std::thread::sleep(Duration::from_millis(200));
     };
     let (out, err) = (out.join().unwrap_or_default(), err.join().unwrap_or_default());
-    if status.success() {
-        Ok(out)
-    } else {
-        Err(last_line(&err).or_else(|| last_line(&out)).unwrap_or_else(|| t("Claude Code stopped with an error.")))
-    }
+    Ok((status.success(), out, err))
 }
 
 /// Text without the terminal's control sequences (colours, cursor moves).

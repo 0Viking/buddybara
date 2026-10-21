@@ -48,6 +48,8 @@ windows = { version = "0.61", features = [
   # Quiet while a game or a video fills the screen (platform::fullscreen_busy).
   # Already compiled for tao and wry.
   "Win32_UI_Shell",
+  # Settings → Skills → Add: the file dialog's list of kinds (platform::pick_file).
+  "Win32_UI_Shell_Common",
   "Win32_UI_WindowsAndMessaging",
 ] }
 

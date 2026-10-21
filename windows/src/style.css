@@ -619,6 +619,42 @@ input[type="range"]::-webkit-slider-thumb {
   opacity: 0.3;
 }
 
+/* A table wider than the panel scrolls sideways inside its frame. */
+.md-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--tint) calc(12% * var(--lines)), transparent);
+  border-radius: calc(8px * var(--round));
+}
+
+.md-table table {
+  border-collapse: collapse;
+  min-width: 100%;
+  font: 400 calc(12px * var(--text, 1)) var(--font);
+  color: var(--ink-4);
+}
+
+.md-table :is(th, td) {
+  padding: 5px 9px;
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.md-table th {
+  font-weight: 600;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
+}
+
+.md-table td {
+  border-top: 1px solid color-mix(in srgb, var(--tint) calc(10% * var(--lines)), transparent);
+}
+
+.md-table :is(th, td) + :is(th, td) {
+  border-inline-start: 1px solid color-mix(in srgb, var(--tint) calc(10% * var(--lines)), transparent);
+}
+
 .typing {
   display: flex;
   gap: 4px;
@@ -673,7 +709,7 @@ html[data-dir="rtl"] #views :is(.code, .gh-grid, .diff-card, .md-pre) {
   direction: ltr;
 }
 
-html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-item, .reply .md-quote, .chat-input) {
+html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-item, .reply .md-quote, .reply .md-table :is(th, td), .chat-input) {
   unicode-bidi: plaintext;
   text-align: start;
 }

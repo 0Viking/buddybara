@@ -13,7 +13,7 @@ import {
 import { BUDDY_SIZES, DESKTOP_EVENTS, PREVIEW_STEPS, buddySize } from "../buddybara/desktop-logic";
 import { BotEngine } from "../buddybara/engine";
 import { asSkin, skinPng } from "../buddybara/skin";
-import { language, t } from "../i18n/i18n";
+import { N_, language, t } from "../i18n/i18n";
 import { clear, h, svg } from "../views/dom";
 import { pageOf } from "./parts";
 
@@ -263,9 +263,9 @@ export function customizePage(settings: Settings, save: () => Promise<void>): HT
     style.append(
       h("h2", {}, h("span", { text: t("Style") })),
       h("div", { class: "colors" },
-        row("font", "Font", FONTS, look.font, (f) => `${t(f.label)} · ${f.family}`),
-        row("corners", "Corners", CORNERS, look.corners, (c) => t(c.label)),
-        row("lines", "Lines", LINES, look.lines, (l) => t(l.label)),
+        row("font", N_("Font"), FONTS, look.font, (f) => `${t(f.label)} · ${f.family}`),
+        row("corners", N_("Corners"), CORNERS, look.corners, (c) => t(c.label)),
+        row("lines", N_("Lines"), LINES, look.lines, (l) => t(l.label)),
         // Not part of the scheme: another one picked keeps it.
         textSizeRow(() => textSize(settings.textSize), (n) => {
           settings.textSize = n;

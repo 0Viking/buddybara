@@ -1,5 +1,6 @@
 // Buddybara for Windows — app wiring and the commands the island calls.
 
+mod addons;
 mod agents;
 mod chat;
 mod claude;
@@ -363,6 +364,52 @@ async fn code_messages(project: String, session: String) -> Result<Vec<code::Mes
     code::messages(&project, &session)
 }
 
+/// The `/` menu's commands in a project, or Settings → Skills' without one
+/// (code::commands): a second or two, off the async threads.
+#[tauri::command]
+async fn code_commands(project: Option<String>) -> Result<Vec<code::SlashCommand>, String> {
+    tauri::async_runtime::spawn_blocking(move || code::commands(project.as_deref())).await.map_err(|e| e.to_string())?
+}
+
+/// Settings → Claude Code → Usage: a conversation's totals, read off the end
+/// of its file (code::usage), off the async threads.
+#[tauri::command]
+async fn code_usage(project: Option<String>, session: Option<String>) -> Result<Option<code::SessionUsage>, String> {
+    tauri::async_runtime::spawn_blocking(move || code::usage(project.as_deref(), session.as_deref())).await.map_err(|e| e.to_string())?
+}
+
+/// The panel's /usage: Settings → Claude Code, its Usage on the conversation
+/// it was typed in (or the project's newest one).
+#[tauri::command]
+fn open_settings_usage(app: AppHandle, project: Option<String>, session: Option<String>) {
+    show_settings_window(&app);
+    let _ = app.emit_to("settings", "settings-usage", serde_json::json!({ "project": project, "session": session }));
+}
+
+/// Whether Claude Code is mid-turn in a session (code::turn_open): the panel
+/// takes a conversation over from the terminal only between turns.
+#[tauri::command]
+async fn code_turn_open(project: String, session: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || code::turn_open(&project, &session)).await.map_err(|e| e.to_string())?
+}
+
+/// /memory: the project's CLAUDE.md files, opened in VS Code (code::memory).
+#[tauri::command]
+async fn code_memory(project: String) -> Result<usize, String> {
+    code::memory(&project)
+}
+
+/// Settings → Skills → Use: the panel opens with the command typed, not sent
+/// (buddy.ts useCommand). Only a command, on one line.
+#[tauri::command]
+fn panel_use(app: AppHandle, text: String) -> Result<(), String> {
+    let text = text.trim();
+    if !text.starts_with('/') || text.contains(['\n', '\r']) || text.chars().count() > 200 {
+        return Err("not a command".into());
+    }
+    app.emit_to(island::WINDOW_LABEL, "panel-use", text).map_err(|e| e.to_string())
+}
+
 /// Sends a session to the Recycle Bin (code::delete_session).
 #[tauri::command]
 async fn code_delete_session(project: String, session: String) -> Result<(), String> {
@@ -512,11 +559,30 @@ fn create_settings_window(app: &AppHandle) {
         Ok(win) => {
             // Closing it must only hide it, or it could never be reopened.
             let hidden = win.clone();
-            win.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            let app = app.clone();
+            win.on_window_event(move |event| match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = hidden.hide();
                 }
+                // Files dropped on it: Skills and Plugins → Add looks inside
+                // them (and only paths a drop or a dialog gave: addons.rs).
+                tauri::WindowEvent::DragDrop(drop) => match drop {
+                    tauri::DragDropEvent::Enter { .. } => {
+                        let _ = app.emit_to("settings", "settings-drag", true);
+                    }
+                    tauri::DragDropEvent::Leave => {
+                        let _ = app.emit_to("settings", "settings-drag", false);
+                    }
+                    tauri::DragDropEvent::Drop { paths, .. } => {
+                        addons::offer(paths.iter().cloned());
+                        let paths: Vec<String> = paths.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+                        let _ = app.emit_to("settings", "settings-drag", false);
+                        let _ = app.emit_to("settings", "settings-drop", paths);
+                    }
+                    _ => {}
+                },
+                _ => {}
             });
         }
         Err(err) => log::line(format!("settings window failed: {err}")),
@@ -604,6 +670,12 @@ pub fn run() {
             code_sessions,
             code_new_project,
             code_messages,
+            code_commands,
+            code_memory,
+            code_usage,
+            code_turn_open,
+            open_settings_usage,
+            panel_use,
             code_rename_session,
             code_delete_session,
             terminal::terminal_open,
@@ -637,6 +709,16 @@ pub fn run() {
             directory::connector_search,
             directory::plugin_install,
             directory::plugin_uninstall,
+            addons::addon_pick,
+            addons::addon_inspect,
+            addons::addon_add_marketplace,
+            addons::addon_install,
+            addons::addon_install_from,
+            addons::plugins_installed,
+            addons::plugin_action,
+            addons::skills_mine,
+            addons::skill_remove,
+            addons::skill_create,
             open_settings_window,
             desktop::desktop_buddybara_info,
             desktop::desktop_buddybara_drag_begin,

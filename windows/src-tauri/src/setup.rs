@@ -54,6 +54,7 @@ pub async fn setup_status() -> Result<Status, String> {
 
 /// "install": Claude Code from winget (its setup page when there is no
 /// winget). "login": Claude Code's own sign-in, which opens the browser.
+/// "logout": its sign-out (the panel's /logout).
 #[tauri::command]
 pub fn setup_start(step: String) -> Result<(), String> {
     #[cfg(windows)]
@@ -67,9 +68,9 @@ pub fn setup_start(step: String) -> Result<(), String> {
                     return Ok(());
                 }
             },
-            "login" => {
+            "login" | "logout" => {
                 let exe = crate::code::claude_exe().ok_or_else(|| crate::i18n::t("Claude Code isn't installed: `claude` was not found."))?;
-                format!("\"{}\" auth login", exe.display())
+                format!("\"{}\" auth {step}", exe.display())
             }
             _ => return Err(format!("unknown step {step}")),
         };

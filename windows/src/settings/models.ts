@@ -70,6 +70,15 @@ function modelRow(def: ProviderDef, settings: Settings, save: () => void, known?
   return h("div", { class: "row" }, h("label", { text: t("Model") }), select, status);
 }
 
+/** "Key from {site}", the site a link to the provider's API keys page. */
+function keyHint(def: ProviderDef): HTMLElement {
+  const mark = "\u0001";
+  const [before, after = ""] = t("Key from {site}", { site: mark }).split(mark);
+  const link = h("button", { class: "link", text: def.site, title: def.keyUrl });
+  link.addEventListener("click", () => void Bridge.openUrl(def.keyUrl));
+  return h("div", { class: "hint" }, before, link, after);
+}
+
 function cloudBlock(def: ProviderDef, settings: Settings, save: () => void, present: Record<string, boolean>): HTMLElement {
   const key = def.key!;
   const body = h("div", { class: "stack svc-keys" });
@@ -81,9 +90,22 @@ function cloudBlock(def: ProviderDef, settings: Settings, save: () => void, pres
       placeholder: present[key] ? stored : def.placeholder,
     }) as HTMLInputElement;
     const dotEl = statusDot(present[key] ?? false);
-    const saveBtn = h("button", { text: t("Save") });
-    // An empty field saved removes the key.
-    saveBtn.addEventListener("click", async () => {
+    // A key stored and nothing typed: Remove. Typing a new one makes it Save again.
+    const button = h("button", {}) as HTMLButtonElement;
+    const relabel = () => {
+      const typed = input.value.trim() !== "";
+      const remove = present[key] === true && !typed;
+      button.textContent = remove ? t("Remove") : t("Save");
+      button.className = remove ? "danger" : "";
+      button.disabled = !remove && !typed;
+    };
+    input.addEventListener("input", relabel);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && input.value.trim()) button.click();
+    });
+    relabel();
+    // Saved empty, the key is taken out of the Credential Manager.
+    button.addEventListener("click", async () => {
       const value = input.value.trim();
       try {
         await Bridge.secretSet(key, value);
@@ -94,8 +116,8 @@ function cloudBlock(def: ProviderDef, settings: Settings, save: () => void, pres
       }
     });
     body.append(
-      h("div", { class: "row" }, h("label", { text: t("API key") }), input, saveBtn, dotEl),
-      h("div", { class: "hint", text: t("Key from {site}", { site: def.site }) }),
+      h("div", { class: "row" }, h("label", { text: t("API key") }), input, button, dotEl),
+      keyHint(def),
     );
     if (present[key]) body.append(modelRow(def, settings, save));
   };
@@ -192,7 +214,7 @@ function serverBlock(def: ProviderDef, settings: Settings, save: () => void, pre
 export function modelsPage(settings: Settings, save: () => void, present: Record<string, boolean>): HTMLElement {
   return pageOf(
     t("AI models"),
-    t("Chat with Google AI, OpenAI, OpenRouter or a model you run yourself: pick one in the buddy's model menu for a new conversation. They answer, but get no tools: they can't read files or act on this computer."),
+    t("Chat with Google AI, OpenAI, OpenRouter or a model you run yourself: open one as a tab in the panel's drawer, or pick it in the buddy's model menu for a new conversation. They answer, but get no tools: they can't read files or act on this computer."),
     h("div", { class: "card" },
       h("h2", {}, h("span", { text: t("Cloud providers") })),
       ...PROVIDERS.filter((p) => p.key).map((def) => cloudBlock(def, settings, save, present)),

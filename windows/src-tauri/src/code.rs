@@ -19,7 +19,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{LazyLock, Mutex};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -104,12 +104,14 @@ pub fn current_root() -> PathBuf {
     root()
 }
 
+/// Claude Code's own folder (~/.claude).
+pub(crate) fn config_dir() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| platform::home_dir().join(".claude"))
+}
+
 /// Where Claude Code keeps conversations, one folder per project.
 fn store() -> PathBuf {
-    std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| platform::home_dir().join(".claude"))
-        .join("projects")
+    config_dir().join("projects")
 }
 
 /// Claude Code's folder name for a project: every character other than an
@@ -613,7 +615,8 @@ fn typed_part(text: &str) -> String {
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Message {
-    /// "user", "assistant", or "step": a tool Claude called.
+    /// "user", "assistant", "step": a tool Claude called, or "compacted":
+    /// where Claude Code summarized the conversation before it.
     pub role: &'static str,
     pub text: String,
     /// A step's tool and the few fields it is labelled by (`brief`): the page
@@ -622,16 +625,23 @@ pub struct Message {
     pub tool: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input: Option<Value>,
+    /// How big the conversation was when it was compacted, in tokens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<u64>,
 }
 
 impl Message {
     fn said(role: &'static str, text: String) -> Self {
-        Self { role, text, tool: None, input: None }
+        Self { role, text, tool: None, input: None, tokens: None }
     }
 
     fn step(block: &Value) -> Self {
         let tool = block.get("name").and_then(Value::as_str).unwrap_or("Tool").to_string();
-        Self { role: "step", text: String::new(), tool: Some(tool), input: Some(brief(block.get("input"))) }
+        Self { role: "step", text: String::new(), tool: Some(tool), input: Some(brief(block.get("input"))), tokens: None }
+    }
+
+    fn compacted(tokens: Option<u64>) -> Self {
+        Self { role: "compacted", text: String::new(), tool: None, input: None, tokens }
     }
 }
 
@@ -648,9 +658,10 @@ pub fn messages(project: &str, session: &str) -> Result<Vec<Message>, String> {
     Ok(conversation(&String::from_utf8_lossy(&bytes), MAX_TURNS))
 }
 
-/// The conversation as a run draws it live: what the user typed, what Claude
-/// answered and the tools it called on the way, newest last — the last `max`
-/// turns, each from its prompt on, with the newest MAX_STEPS steps among
+/// The conversation as a run draws it live: what the user typed (slash
+/// commands too, with what they printed), what Claude answered and the tools
+/// it called on the way, and where it was compacted, newest last — the last
+/// `max` turns, each from its prompt on, with the newest MAX_STEPS steps among
 /// them. Counting turns, not messages: a long answer split by its steps never
 /// pushes the prompt that asked for it off the top. Tool results, thinking,
 /// subagents and Claude Code's bookkeeping are left out; the pieces of one
@@ -659,12 +670,26 @@ pub fn conversation(text: &str, max: usize) -> Vec<Message> {
     let mut out: Vec<Message> = Vec::new();
     for line in text.lines() {
         // Most lines are tool results: skip them before parsing.
-        if !(line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") || line.contains("\"queued_command\"")) {
+        if !(line.contains("\"type\":\"user\"")
+            || line.contains("\"type\":\"assistant\"")
+            || line.contains("\"queued_command\"")
+            || line.contains("\"compact_boundary\""))
+        {
             continue;
         }
         let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
-        if let Some(text) = user_text(&v).or_else(|| sent_meanwhile(&v)) {
+        if v.get("type").and_then(Value::as_str) == Some("system") {
+            if v.get("subtype").and_then(Value::as_str) == Some("compact_boundary") {
+                out.push(Message::compacted(v.pointer("/compactMetadata/preTokens").and_then(Value::as_u64)));
+            }
+            continue;
+        }
+        if let Some(text) = user_text(&v).or_else(|| typed_command(&v)).or_else(|| sent_meanwhile(&v)) {
             out.push(Message::said("user", text));
+            continue;
+        }
+        if let Some(text) = command_output(&v) {
+            out.push(Message::said("assistant", text));
             continue;
         }
         for block in assistant_blocks(&v) {
@@ -735,6 +760,68 @@ fn user_text(v: &Value) -> Option<String> {
     };
     let text = text.trim();
     (!text.is_empty() && typed(text)).then(|| text.to_string())
+}
+
+/// A user line's text when it is the whole of it (not blocks), from a line
+/// that is the conversation's own.
+fn plain_user_text(v: &Value) -> Option<&str> {
+    if v.get("type").and_then(Value::as_str) != Some("user") || ["isMeta", "isSidechain"].iter().any(|k| flag(v, k)) {
+        return None;
+    }
+    v.pointer("/message/content").and_then(Value::as_str)
+}
+
+/// What is between `<tag>` and `</tag>` in `text`.
+fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+    let start = text.find(&format!("<{tag}>"))? + tag.len() + 2;
+    let end = start + text[start..].find(&format!("</{tag}>"))?;
+    Some(&text[start..end])
+}
+
+/// A slash command the user typed (`/compact focus on the API`), as Claude
+/// Code records it: `<command-name>/compact</command-name>` and its
+/// `<command-args>`. A skill Claude loaded by itself is recorded the same way,
+/// but without the slash, and is no message of the user's.
+fn typed_command(v: &Value) -> Option<String> {
+    let text = plain_user_text(v)?;
+    let name = between(text, "command-name")?.trim();
+    if !name.starts_with('/') {
+        return None;
+    }
+    let args = between(text, "command-args").map(str::trim).unwrap_or_default();
+    Some(if args.is_empty() { name.to_string() } else { format!("{name} {args}") })
+}
+
+/// What a slash command printed (`Set model to …`), from its
+/// `<local-command-stdout>`, without the terminal's colours. Not the
+/// "Compacted" of /compact: its divider says it.
+fn command_output(v: &Value) -> Option<String> {
+    let text = plain_user_text(v)?.trim_start();
+    if !text.starts_with("<local-command-stdout>") {
+        return None;
+    }
+    let output = strip_ansi(between(text, "local-command-stdout")?);
+    let output = output.trim();
+    (!output.is_empty() && !output.starts_with("Compacted")).then(|| output.to_string())
+}
+
+/// `s` without its ANSI escape sequences (`ESC [ … letter`).
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' && chars.peek() == Some(&'[') {
+            chars.next();
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// A message sent while Claude was at work, from the line that recorded it
@@ -1003,13 +1090,41 @@ fn watch(app: &AppHandle, run: u64, mut child: Child) {
 
 /// What the page hears of one line of `--output-format stream-json`: the
 /// session's id when it starts, Claude's words and tool calls as they come (the
-/// main conversation's, not its subagents'), and the result.
+/// main conversation's, not its subagents'), compaction, and the result.
 pub fn events(v: &Value) -> Vec<Value> {
     let session = v.get("session_id").cloned().unwrap_or(Value::Null);
     match v.get("type").and_then(Value::as_str) {
-        Some("system") if v.get("subtype").and_then(Value::as_str) == Some("init") => {
-            vec![json!({ "kind": "init", "session": session })]
-        }
+        Some("system") => match v.get("subtype").and_then(Value::as_str) {
+            Some("init") => vec![json!({ "kind": "init", "session": session })],
+            // Compaction (asked for with /compact, or when the context is
+            // full): a status when it starts, another with its result when it
+            // ends, then, if it worked, the boundary with the sizes.
+            Some("status") if v.get("status").and_then(Value::as_str) == Some("compacting") => {
+                vec![json!({ "kind": "compacting" })]
+            }
+            Some("status") => match v.get("compact_result").and_then(Value::as_str) {
+                Some(result) if result != "success" => vec![json!({
+                    "kind": "compact_failed",
+                    "text": v.get("compact_error").and_then(Value::as_str).unwrap_or_default(),
+                })],
+                // An automatic one Claude Code started, then found it needn't
+                // do: the status goes back to none, with no result.
+                None if v.get("status").is_none_or(Value::is_null) && v.get("permissionMode").is_none() => {
+                    vec![json!({ "kind": "compact_skipped" })]
+                }
+                _ => Vec::new(),
+            },
+            Some("compact_boundary") => vec![json!({
+                "kind": "compacted",
+                "tokens": v.pointer("/compact_metadata/pre_tokens").and_then(Value::as_u64),
+            })],
+            // The name the user gave the session (/rename), said again when a run starts.
+            Some("session_title_changed") => match v.get("title").and_then(Value::as_str).map(str::trim) {
+                Some(title) if !title.is_empty() => vec![json!({ "kind": "title", "text": title })],
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        },
         Some("assistant") if v.get("parent_tool_use_id").is_none_or(Value::is_null) => {
             let Some(blocks) = v.pointer("/message/content").and_then(Value::as_array) else { return Vec::new() };
             blocks
@@ -1059,10 +1174,315 @@ fn brief(input: Option<&Value>) -> Value {
 pub fn stop(run: u64) {
     let Some(pid) = RUNS.lock().unwrap().get(&run).copied() else { return };
     log::line(format!("code run {run} stopped"));
+    kill_tree(pid);
+}
+
+/// Ends a process and everything it started.
+fn kill_tree(pid: u32) {
     #[cfg(windows)]
     let _ = platform::no_console(Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"])).status();
     #[cfg(unix)]
     let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
+}
+
+// ── The / menu ────────────────────────────────────────────────────────────────
+
+/// The `--settings` layer of the run that lists the commands: no hooks, so
+/// it starts no session anywhere (the island's, a gateway's).
+const NO_HOOKS: &str = r#"{"disableAllHooks":true}"#;
+/// How long Claude Code may take to answer (it loads its plugins first).
+const COMMANDS_WAIT: Duration = Duration::from_secs(30);
+/// How long it may take to end once its input is closed, before it is stopped.
+const COMMANDS_EXIT: Duration = Duration::from_secs(5);
+
+/// One entry of the `/` menu: a command built into Claude Code, a skill, a
+/// plugin's (`plugin:name`), or one of the user's or the project's own.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SlashCommand {
+    pub name: String,
+    pub description: String,
+    pub argument_hint: String,
+    pub aliases: Vec<String>,
+    pub builtin: bool,
+}
+
+/// The commands Claude Code has in `project`, asked as the Agent SDK asks for
+/// them: an `initialize` request, answered before any message, so no model is
+/// called. The run saves nothing and runs no hooks; once it has answered, its
+/// input is closed and it ends (or is stopped). Without a project (Settings →
+/// Skills), asked from the home folder: the user's own and plugins', no
+/// project's.
+pub fn commands(project: Option<&str>) -> Result<Vec<SlashCommand>, String> {
+    let cwd = match project {
+        Some(project) => allowed(project)?,
+        None => platform::home_dir(),
+    };
+    let exe = claude_exe().ok_or_else(|| "Claude Code isn't installed.".to_string())?;
+    let mut cmd = Command::new(exe);
+    cmd.env("CLAUDE_CODE_ENTRYPOINT", ENTRYPOINT);
+    cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
+        .args(["--no-session-persistence", "--settings", NO_HOOKS])
+        .current_dir(&cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let mut child = platform::no_console(&mut cmd).spawn().map_err(|e| format!("Could not start Claude Code: {e}"))?;
+    let mut input = child.stdin.take();
+    let request = json!({ "type": "control_request", "request_id": "buddybara-commands", "request": { "subtype": "initialize" } });
+    if let Some(stdin) = input.as_mut() {
+        let _ = stdin.write_all(format!("{request}\n").as_bytes());
+    }
+    let (found, answer) = channel::<Value>();
+    if let Some(out) = child.stdout.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(out).lines().map_while(Result::ok) {
+                let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+                if v.get("type").and_then(Value::as_str) == Some("control_response") {
+                    let _ = found.send(v);
+                    return;
+                }
+            }
+        });
+    }
+    let reply = answer.recv_timeout(COMMANDS_WAIT);
+    drop(input);
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + COMMANDS_EXIT;
+        while std::time::Instant::now() < deadline {
+            if !matches!(child.try_wait(), Ok(None)) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        kill_tree(child.id());
+        let _ = child.wait();
+    });
+    let reply = reply.map_err(|_| "Claude Code didn't list its commands.".to_string())?;
+    let list = parse_commands(&reply);
+    if let Err(err) = &list {
+        log::line(format!("commands: {err}"));
+    }
+    list
+}
+
+// ── Usage ─────────────────────────────────────────────────────────────────────
+
+/// A conversation's totals as Claude Code keeps them (Settings → Claude Code →
+/// Usage): what it cost, how long the API took, how long it has been going,
+/// the lines it changed. They count every run it had, wherever it ran.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionUsage {
+    pub project: String,
+    pub session: String,
+    pub title: String,
+    pub cost_usd: f64,
+    pub api_ms: u64,
+    pub wall_ms: u64,
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    /// A model Claude Code has no price for was used: the cost leaves it out.
+    pub unknown_cost: bool,
+}
+
+/// How many of the newest conversations are looked through for one with totals.
+const USAGE_LOOK: usize = 12;
+
+/// The totals of `session` in `project`; without a session, those of the
+/// project's newest conversation that has some; without a project either,
+/// the newest among the listed projects'. None: none saved yet.
+pub fn usage(project: Option<&str>, session: Option<&str>) -> Result<Option<SessionUsage>, String> {
+    let mut candidates: Vec<(String, String, PathBuf, u64)> = match project {
+        Some(given) => {
+            let dir = allowed(given)?;
+            session_files(&dir)
+                .into_iter()
+                .filter(|f| session.is_none_or(|s| f.0 == s))
+                .map(|(id, path, last)| (given.to_string(), id, path, last))
+                .collect()
+        }
+        None => projects()
+            .into_iter()
+            .filter(|p| p.sessions > 0)
+            .flat_map(|p| {
+                let files = session_files(Path::new(&p.path));
+                files.into_iter().map(move |(id, path, last)| (p.path.clone(), id, path, last))
+            })
+            .collect(),
+    };
+    if session.is_some() && candidates.is_empty() {
+        return Err("This session is gone.".into());
+    }
+    candidates.sort_by(|a, b| b.3.cmp(&a.3));
+    for (project, id, path, _) in candidates.into_iter().take(USAGE_LOOK) {
+        let Some(state) = last_cost_state(&path, COST_CHUNK) else { continue };
+        let (head, tail) = ends(&path);
+        let title = describe(&head, &tail).title.unwrap_or_else(|| id[..8].to_string());
+        return Ok(Some(session_usage(project, id, title, &state)));
+    }
+    Ok(None)
+}
+
+/// A `cost-state` line as the totals it holds.
+fn session_usage(project: String, session: String, title: String, v: &Value) -> SessionUsage {
+    let whole = |key: &str| v.get(key).and_then(Value::as_f64).map_or(0, |n| n.max(0.0) as u64);
+    SessionUsage {
+        cost_usd: v.get("totalCostUSD").and_then(Value::as_f64).unwrap_or(0.0),
+        api_ms: whole("totalAPIDuration"),
+        wall_ms: whole("totalDuration"),
+        lines_added: whole("totalLinesAdded"),
+        lines_removed: whole("totalLinesRemoved"),
+        unknown_cost: flag(v, "hasUnknownModelCost"),
+        project,
+        session,
+        title,
+    }
+}
+
+/// How much of a file is read at a time, from its end, looking for its totals.
+const COST_CHUNK: u64 = 256 * 1024;
+
+/// The last `cost-state` line of a conversation's file: the running totals
+/// Claude Code appends after its runs.
+fn last_cost_state(path: &Path, chunk: u64) -> Option<Value> {
+    const MARK: &[u8] = br#""type":"cost-state""#;
+    last_line(path, chunk, |line| line.windows(MARK.len()).any(|w| w == MARK), |v| {
+        v.get("type").and_then(Value::as_str) == Some("cost-state")
+    })
+}
+
+// ── Handing a conversation over from the terminal ─────────────────────────────
+
+/// Whether Claude Code is mid-turn in `session`: at work, or waiting on a
+/// permission or a question. The panel only takes a conversation over from
+/// the terminal between turns (buddy.ts takeFromTerminal).
+pub fn turn_open(project: &str, session: &str) -> Result<bool, String> {
+    let project = allowed(project)?;
+    let (_, path, _) = session_files(&project)
+        .into_iter()
+        .find(|f| f.0 == session)
+        .ok_or_else(|| "This session is gone.".to_string())?;
+    const USER: &[u8] = br#""type":"user""#;
+    const ASSISTANT: &[u8] = br#""type":"assistant""#;
+    let turn = last_line(
+        &path,
+        COST_CHUNK,
+        |line| line.windows(USER.len()).any(|w| w == USER) || line.windows(ASSISTANT.len()).any(|w| w == ASSISTANT),
+        |v| matches!(v.get("type").and_then(Value::as_str), Some("user" | "assistant")) && !flag(v, "isSidechain"),
+    );
+    Ok(turn.as_ref().is_some_and(still_going))
+}
+
+/// A conversation's last turn line says Claude still has to answer: it asked
+/// for a tool (running, or waiting on the user), or a prompt or a tool's result
+/// has no answer yet. Not: an answer that ended the turn, a turn the user
+/// interrupted, a typed command's own lines.
+fn still_going(v: &Value) -> bool {
+    if v.get("type").and_then(Value::as_str) == Some("assistant") {
+        return v.pointer("/message/stop_reason").and_then(Value::as_str) == Some("tool_use");
+    }
+    // Claude Code's own lines (a caveat, the summary a compaction leaves) ask nothing.
+    if flag(v, "isMeta") || flag(v, "isCompactSummary") {
+        return false;
+    }
+    let content = v.pointer("/message/content");
+    if content.and_then(Value::as_array).is_some_and(|blocks| blocks.iter().any(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))) {
+        return true;
+    }
+    let text = match content {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(blocks)) => blocks.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    };
+    let text = text.trim_start();
+    !(text.starts_with("[Request interrupted")
+        || text.contains("<command-name>")
+        || text.contains("<local-command-stdout>")
+        || text.contains("<local-command-caveat>"))
+}
+
+/// The last line of a file that `maybe` (on its bytes, cheap) and `keep` (once
+/// parsed) both pick. Read from the end, `chunk` bytes at a time, so a long
+/// conversation isn't read whole.
+fn last_line(path: &Path, chunk: u64, maybe: impl Fn(&[u8]) -> bool, keep: impl Fn(&Value) -> bool) -> Option<Value> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut end = file.metadata().ok()?.len();
+    // The start of a line the chunk after this one began in the middle of.
+    let mut rest: Vec<u8> = Vec::new();
+    while end > 0 {
+        let start = end.saturating_sub(chunk);
+        let mut buf = vec![0; (end - start) as usize];
+        file.seek(SeekFrom::Start(start)).ok()?;
+        file.read_exact(&mut buf).ok()?;
+        buf.extend_from_slice(&rest);
+        // Whole lines only: the first may have begun in the chunk before.
+        let whole = if start == 0 { 0 } else { buf.iter().position(|&b| b == b'\n').map_or(buf.len(), |i| i + 1) };
+        for line in buf[whole..].split(|&b| b == b'\n').rev() {
+            if !maybe(line) {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_slice::<Value>(line) {
+                if keep(&v) {
+                    return Some(v);
+                }
+            }
+        }
+        rest = buf[..whole].to_vec();
+        end = start;
+    }
+    None
+}
+
+/// /memory: the CLAUDE.md files Claude Code reads in `project` (the user's,
+/// the project's, its `.claude` one, the local one), those there are, shown
+/// as a link in an answer is: in VS Code. Returns how many.
+pub fn memory(project: &str) -> Result<usize, String> {
+    let project = allowed(project)?;
+    let found: Vec<PathBuf> = memory_files(&config_dir(), &project).into_iter().filter(|f| f.is_file()).collect();
+    if found.is_empty() {
+        return Err(crate::i18n::t("No CLAUDE.md yet: /init writes one."));
+    }
+    for file in &found {
+        platform::show_file(file, None);
+    }
+    Ok(found.len())
+}
+
+fn memory_files(config: &Path, project: &Path) -> [PathBuf; 4] {
+    [
+        config.join("CLAUDE.md"),
+        project.join("CLAUDE.md"),
+        project.join(".claude").join("CLAUDE.md"),
+        project.join("CLAUDE.local.md"),
+    ]
+}
+
+/// The commands of an answer to `initialize`.
+fn parse_commands(reply: &Value) -> Result<Vec<SlashCommand>, String> {
+    let response = reply.get("response").ok_or_else(|| "an answer without a response".to_string())?;
+    if response.get("subtype").and_then(Value::as_str) == Some("error") {
+        return Err(response.get("error").and_then(Value::as_str).unwrap_or("an error").to_string());
+    }
+    let list = response.pointer("/response/commands").and_then(Value::as_array).ok_or_else(|| "no commands".to_string())?;
+    let text = |c: &Value, key: &str| c.get(key).and_then(Value::as_str).unwrap_or_default().trim().to_string();
+    Ok(list
+        .iter()
+        .filter_map(|c| {
+            let name = text(c, "name");
+            (!name.is_empty()).then(|| SlashCommand {
+                description: text(c, "description"),
+                argument_hint: text(c, "argumentHint"),
+                aliases: c
+                    .get("aliases")
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+                    .unwrap_or_default(),
+                builtin: flag(c, "builtin"),
+                name,
+            })
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -1298,6 +1718,7 @@ mod tests {
             text: String::new(),
             tool: Some("Read".into()),
             input: Some(json!({ "file_path": "C:\\p\\auth.ts" })),
+            tokens: None,
         };
         let all = conversation(&lines, 10);
         assert_eq!(
@@ -1398,5 +1819,151 @@ mod tests {
         let done = json!({ "type": "result", "result": "Done.", "is_error": false, "session_id": "s1" });
         assert_eq!(events(&done), vec![json!({ "kind": "result", "text": "Done.", "error": false, "session": "s1" })]);
         assert!(events(&json!({ "type": "user" })).is_empty());
+    }
+
+    #[test]
+    fn compaction_starts_ends_and_says_how_big_the_conversation_was() {
+        let status = |fields: Value| {
+            let mut v = json!({ "type": "system", "subtype": "status", "session_id": "s1" });
+            v.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+            events(&v)
+        };
+        assert_eq!(status(json!({ "status": "compacting" })), vec![json!({ "kind": "compacting" })]);
+        // A success says nothing yet: the boundary that follows has the sizes.
+        assert!(status(json!({ "status": null, "compact_result": "success" })).is_empty());
+        assert_eq!(
+            status(json!({ "status": null, "compact_result": "failed", "compact_error": "Too few messages." })),
+            vec![json!({ "kind": "compact_failed", "text": "Too few messages." })]
+        );
+        // An automatic one that turned out not to be needed ends with no result.
+        assert_eq!(status(json!({ "status": null })), vec![json!({ "kind": "compact_skipped" })]);
+        // Other statuses (a permission mode changing, a request starting) are not compaction.
+        assert!(status(json!({ "status": null, "permissionMode": "plan" })).is_empty());
+        assert!(status(json!({ "status": "requesting" })).is_empty());
+        let boundary = json!({ "type": "system", "subtype": "compact_boundary", "compact_metadata": { "trigger": "manual", "pre_tokens": 73870, "post_tokens": 7470 } });
+        assert_eq!(events(&boundary), vec![json!({ "kind": "compacted", "tokens": 73870 })]);
+    }
+
+    #[test]
+    fn a_session_renamed_with_rename_says_its_new_name() {
+        let renamed = json!({ "type": "system", "subtype": "session_title_changed", "title": " Mic fixes ", "session_id": "s1" });
+        assert_eq!(events(&renamed), vec![json!({ "kind": "title", "text": "Mic fixes" })]);
+        assert!(events(&json!({ "type": "system", "subtype": "session_title_changed", "title": "" })).is_empty());
+    }
+
+    #[test]
+    fn a_conversations_totals_are_its_last_cost_state_whatever_the_read_size() {
+        let dir = std::env::temp_dir().join(format!("buddybara-cost-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("s.jsonl");
+        let lines = [
+            r#"{"type":"user","message":{"content":"hi"}}"#,
+            r#"{"type":"cost-state","sessionId":"s","totalCostUSD":1.5,"totalAPIDuration":1000,"totalDuration":5000}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"says \"type\":\"cost-state\" in passing"}]}}"#,
+            r#"{"type":"cost-state","sessionId":"s","totalCostUSD":370.3015,"totalAPIDuration":49421631.0,"totalDuration":308110406,"totalLinesAdded":11850,"totalLinesRemoved":1006,"hasUnknownModelCost":true}"#,
+            r#"{"type":"last-prompt","lastPrompt":"more"}"#,
+        ];
+        std::fs::write(&file, lines.join("\n")).unwrap();
+        for chunk in [7, 64, 100, COST_CHUNK] {
+            let state = last_cost_state(&file, chunk).expect("found");
+            assert_eq!(state["totalCostUSD"], json!(370.3015), "chunk {chunk}");
+        }
+        let usage = session_usage("C:\\p".into(), "s".into(), "Slash commands".into(), &last_cost_state(&file, 64).unwrap());
+        assert_eq!(
+            usage,
+            SessionUsage {
+                project: "C:\\p".into(),
+                session: "s".into(),
+                title: "Slash commands".into(),
+                cost_usd: 370.3015,
+                api_ms: 49421631,
+                wall_ms: 308110406,
+                lines_added: 11850,
+                lines_removed: 1006,
+                unknown_cost: true,
+            }
+        );
+        // None saved yet.
+        std::fs::write(&file, lines[0]).unwrap();
+        assert_eq!(last_cost_state(&file, 7), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn claude_is_mid_turn_until_an_answer_ends_it() {
+        let line = |s: &str| serde_json::from_str::<Value>(s).unwrap();
+        // At work, or waiting on a permission or a question.
+        assert!(still_going(&line(r#"{"type":"assistant","message":{"stop_reason":"tool_use","content":[{"type":"tool_use"}]}}"#)));
+        assert!(still_going(&line(r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"ok"}]}}"#)));
+        assert!(still_going(&line(r#"{"type":"user","message":{"content":"fix the build"}}"#)));
+        // Between turns.
+        assert!(!still_going(&line(r#"{"type":"assistant","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}"#)));
+        assert!(!still_going(&line(r#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#)));
+        assert!(!still_going(&line(r#"{"type":"user","message":{"content":"<command-name>/model</command-name>"}}"#)));
+        assert!(!still_going(&line(r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to opus</local-command-stdout>"}}"#)));
+        assert!(!still_going(&line(r#"{"type":"user","isMeta":true,"message":{"content":"Caveat"}}"#)));
+        assert!(!still_going(&line(r#"{"type":"user","isCompactSummary":true,"message":{"content":"This session is being continued"}}"#)));
+    }
+
+    #[test]
+    fn memory_is_the_users_claude_md_then_the_projects() {
+        let files = memory_files(Path::new(r"C:\Users\me\.claude"), Path::new(r"C:\p"));
+        assert_eq!(
+            files.map(|f| f.to_string_lossy().into_owned()),
+            [r"C:\Users\me\.claude\CLAUDE.md", r"C:\p\CLAUDE.md", r"C:\p\.claude\CLAUDE.md", r"C:\p\CLAUDE.local.md"]
+        );
+    }
+
+    #[test]
+    fn a_reopened_conversation_shows_typed_commands_their_output_and_compaction() {
+        let lines = [
+            r#"{"type":"user","message":{"content":"hello"}}"#,
+            r#"{"type":"user","message":{"content":"<command-name>/model</command-name>\n            <command-message>model</command-message>\n            <command-args>opus</command-args>"}}"#,
+            r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to \u001b[1mopus\u001b[22m</local-command-stdout>"}}"#,
+            r#"{"type":"user","message":{"content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}"#,
+            r#"{"parentUuid":null,"type":"system","subtype":"compact_boundary","content":"Conversation compacted","compactMetadata":{"trigger":"manual","preTokens":73870,"postTokens":7470}}"#,
+            r#"{"type":"user","isCompactSummary":true,"message":{"content":"This session is being continued…"}}"#,
+            r#"{"type":"user","message":{"content":"<local-command-stdout>Compacted </local-command-stdout>"}}"#,
+            // A skill Claude loaded by itself: no slash, not the user's.
+            r#"{"type":"user","message":{"content":"<command-message>notes</command-message>\n<command-name>notes</command-name>"}}"#,
+            r#"{"type":"user","message":{"content":"thanks"}}"#,
+        ]
+        .join("\n");
+        let said: Vec<(&str, String, Option<u64>)> = conversation(&lines, 10).into_iter().map(|m| (m.role, m.text, m.tokens)).collect();
+        assert_eq!(
+            said,
+            vec![
+                ("user", "hello".into(), None),
+                ("user", "/model opus".into(), None),
+                ("assistant", "Set model to opus".into(), None),
+                ("user", "/compact".into(), None),
+                ("compacted", String::new(), Some(73870)),
+                ("user", "thanks".into(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_menu_lists_what_claude_code_answers_to_initialize() {
+        let reply = json!({ "type": "control_response", "response": { "subtype": "success", "request_id": "r", "response": { "commands": [
+            { "name": "compact", "description": "Free up context", "argumentHint": "<instructions>", "builtin": true },
+            { "name": "notes:daily", "description": "(notes) Write the daily note", "argumentHint": "", "aliases": ["today"] },
+            { "name": "", "description": "nameless" },
+        ] } } });
+        let list = parse_commands(&reply).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(
+            list[0],
+            SlashCommand { name: "compact".into(), description: "Free up context".into(), argument_hint: "<instructions>".into(), aliases: vec![], builtin: true }
+        );
+        assert_eq!((list[1].name.as_str(), list[1].aliases.clone(), list[1].builtin), ("notes:daily", vec!["today".to_string()], false));
+        let refused = json!({ "type": "control_response", "response": { "subtype": "error", "error": "not now" } });
+        assert_eq!(parse_commands(&refused), Err("not now".to_string()));
+    }
+
+    #[test]
+    fn ansi_colours_are_taken_out_of_command_output() {
+        assert_eq!(strip_ansi("\u{1b}[1mBold\u{1b}[22m and \u{1b}[38;5;12mblue\u{1b}[0m"), "Bold and blue");
+        assert_eq!(strip_ansi("plain [1m"), "plain [1m");
     }
 }

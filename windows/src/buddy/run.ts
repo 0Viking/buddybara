@@ -5,8 +5,17 @@ import type { CodeMessage, CodeProject, CodeRunEvent } from "../core/bridge";
 import { stepLabel } from "../island/hooks";
 import { language, t } from "../i18n/i18n";
 
-/** `files`: a user line's attachments, by path. */
-export type Line = { role: "user" | "assistant" | "step" | "error"; text: string; files?: string[] };
+/**
+ * `files`: a user line's attachments, by path. "compacting" / "compacted":
+ * Claude Code summarizing the conversation, then done (`tokens`: how big it
+ * was, when Claude Code said).
+ */
+export type Line = {
+  role: "user" | "assistant" | "step" | "error" | "compacting" | "compacted";
+  text: string;
+  files?: string[];
+  tokens?: number;
+};
 
 /** Typed while a run that can't take it was at work: the next turn, sent when that run ends. */
 export interface Queued {
@@ -62,12 +71,55 @@ export function folderOf(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
+/** A token count as it is said: 850, 74k, 1.2M. */
+export function tokensShort(n: number): string {
+  if (n < 1000) return String(Math.round(n));
+  if (n < 999_500) return `${Math.round(n / 1000)}k`;
+  return `${Math.round(n / 100_000) / 10}M`;
+}
+
+/** Where the "Compacting…" line still waiting for its end is, or -1. */
+function compacting(chat: Chat): number {
+  for (let i = chat.lines.length - 1; i >= 0; i--) if (chat.lines[i].role === "compacting") return i;
+  return -1;
+}
+
+/** A compaction done: how big the conversation was, when that is known. */
+function compactedLine(tokens: number | null | undefined): Line {
+  return tokens ? { role: "compacted", text: "", tokens } : { role: "compacted", text: "" };
+}
+
 /** Adds what a run said to its conversation (code.rs `events`). */
 export function applyRunEvent(chat: Chat, e: CodeRunEvent) {
   const last = chat.lines[chat.lines.length - 1];
   switch (e.kind) {
+    case "compacting":
+      if (compacting(chat) < 0) chat.lines.push({ role: "compacting", text: "" });
+      break;
+    case "compacted": {
+      const at = compacting(chat);
+      if (at >= 0) chat.lines[at] = compactedLine(e.tokens);
+      else chat.lines.push(compactedLine(e.tokens));
+      break;
+    }
+    case "compact_failed": {
+      const at = compacting(chat);
+      if (at >= 0) chat.lines.splice(at, 1);
+      chat.lines.push({ role: "error", text: e.text || t("Couldn't compact the conversation.") });
+      break;
+    }
+    case "compact_skipped": {
+      // Claude Code found it needn't compact after all: nothing to show.
+      const at = compacting(chat);
+      if (at >= 0) chat.lines.splice(at, 1);
+      break;
+    }
     case "init":
       if (e.session) chat.id = e.session;
+      break;
+    case "title":
+      // Renamed (/rename). A side question's title says which conversation it is about: kept.
+      if (e.text && !chat.side) chat.title = e.text;
       break;
     case "text":
       if (!e.text) break;
@@ -80,9 +132,13 @@ export function applyRunEvent(chat: Chat, e: CodeRunEvent) {
       break;
     case "result": {
       chat.failed = e.error === true;
-      // The turn's last answer: messages sent while it was written may follow it.
+      // A compaction that never said how it ended (cancelled) is over with the turn.
+      const stale = compacting(chat);
+      if (stale >= 0) chat.lines.splice(stale, 1);
+      // The turn's last answer: messages sent while it was written may follow
+      // it, and so may a compaction.
       let at = chat.lines.length - 1;
-      while (chat.lines[at]?.role === "user") at--;
+      while (chat.lines[at]?.role === "user" || chat.lines[at]?.role === "compacted") at--;
       const answer = chat.lines[at]?.role === "assistant" ? chat.lines[at] : undefined;
       if (e.error) {
         const text = e.text || "Claude Code stopped.";
@@ -126,6 +182,7 @@ export function userLine(text: string, files: string[]): Line {
 /** A line of a conversation read back from its file, drawn as a live run draws it. */
 export function lineOf(m: CodeMessage): Line {
   if (m.role === "step") return { role: "step", text: stepLabel(m.tool ?? "Tool", m.input ?? {}) };
+  if (m.role === "compacted") return compactedLine(m.tokens);
   if (m.role === "user") {
     const sent = splitAttachments(m.text);
     return userLine(sent.text, sent.files);

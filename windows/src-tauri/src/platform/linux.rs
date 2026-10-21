@@ -274,6 +274,22 @@ pub fn pick_folder(_owner: Option<isize>, start: Option<PathBuf>) -> Option<Path
             },
         ),
     ];
+    first_dialog(runs)
+}
+
+/// One file, of the kinds `types` names (what it is called, and its patterns
+/// `*.zip;*.skill`).
+pub fn pick_file(_owner: Option<isize>, types: (&str, &str)) -> Option<PathBuf> {
+    let patterns = types.1.replace(';', " ");
+    let runs: [(&str, Vec<String>); 2] = [
+        ("zenity", vec!["--file-selection".into(), format!("--file-filter={} | {patterns}", types.0)]),
+        ("kdialog", vec!["--getopenfilename".into(), ".".into(), patterns.clone()]),
+    ];
+    first_dialog(runs)
+}
+
+/// The first of the dialog tools that is installed, run: what was picked.
+fn first_dialog(runs: [(&str, Vec<String>); 2]) -> Option<PathBuf> {
     for (bin, args) in runs {
         let Some(exe) = find_on_path(bin) else { continue };
         if let Ok(out) = Command::new(exe).args(&args).output() {

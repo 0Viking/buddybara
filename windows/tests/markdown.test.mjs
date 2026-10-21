@@ -8,7 +8,7 @@ import { installFakeDom } from "./fakedom.mjs";
 import { calls, sent } from "./tauri.mjs";
 
 const dom = installFakeDom();
-const { fileTarget, parseMarkdown, parseInline, renderMarkdown, safeWebUrl } = await import("../src/views/markdown.ts");
+const { fileTarget, parseMarkdown, parseInline, renderMarkdown, safeWebUrl, tableCells } = await import("../src/views/markdown.ts");
 
 beforeEach(() => {
   calls.length = 0;
@@ -57,6 +57,37 @@ test("quotes, rules and paragraphs that stop at the next block", () => {
   ]);
   assert.deepEqual(parseMarkdown("a\r\nb"), [{ kind: "paragraph", text: "a\nb" }]);
   assert.deepEqual(parseMarkdown(""), []);
+});
+
+test("a table: a header row, a delimiter row, then rows until a blank line", () => {
+  const md = "Before\n| | What | Effort |\n|---|:---|:-:|\n| F1 | The **menu** | M |\n| F2 | History |\n\nAfter";
+  assert.deepEqual(parseMarkdown(md), [
+    { kind: "paragraph", text: "Before" },
+    {
+      kind: "table",
+      align: [null, "left", "center"],
+      head: ["", "What", "Effort"],
+      // A short row is padded to the header's width.
+      rows: [["F1", "The **menu**", "M"], ["F2", "History", ""]],
+    },
+    { kind: "paragraph", text: "After" },
+  ]);
+  // Outer pipes are optional; a long row is cut to the header's width.
+  assert.deepEqual(parseMarkdown("a | b\n--: | ---\n1 | 2 | 3"), [
+    { kind: "table", align: ["right", null], head: ["a", "b"], rows: [["1", "2"]] },
+  ]);
+});
+
+test("table cells keep escaped pipes, pipes in code and <br> line breaks", () => {
+  assert.deepEqual(tableCells("| a \\| b | `x || y` | c |"), ["a | b", "`x || y`", "c"]);
+  assert.deepEqual(parseMarkdown("| A |\n|---|\n| one<br>two<br/>three |")[0].rows, [["one\ntwo\nthree"]]);
+});
+
+test("pipes without a delimiter row are just text", () => {
+  assert.deepEqual(parseMarkdown("a | b\nc | d"), [{ kind: "paragraph", text: "a | b\nc | d" }]);
+  // A delimiter row with another cell count is no table either.
+  assert.deepEqual(parseMarkdown("a | b\n---|---|---"), [{ kind: "paragraph", text: "a | b\n---|---|---" }]);
+  assert.deepEqual(parseMarkdown("| x |\n---"), [{ kind: "paragraph", text: "| x |" }, { kind: "rule" }]);
 });
 
 // ── Inline ────────────────────────────────────────────────────────────────────
@@ -122,6 +153,21 @@ test("each block becomes its own element", () => {
   // Rendering again replaces, it never appends.
   renderMarkdown(root, "plain");
   assert.equal(root.children.length, 1);
+});
+
+test("a table becomes a scrolling frame around a table, cells parsed inline", () => {
+  const root = dom.root();
+  renderMarkdown(root, "| Name | Size |\n|:--|--:|\n| `a.ts` | **12** |\n| b | 3 |");
+  assert.deepEqual(root.children.map((c) => c.className), ["md-table"]);
+  const th = root.find("TH");
+  assert.deepEqual(th.map((c) => c.textContent), ["Name", "Size"]);
+  assert.equal(th[0].style.textAlign, "left");
+  assert.equal(th[1].style.textAlign, "right");
+  const td = root.find("TD");
+  assert.deepEqual(td.map((c) => c.textContent), ["a.ts", "12", "b", "3"]);
+  assert.equal(root.find("TR").length, 3);
+  assert.equal(td[0].find("CODE").length, 1);
+  assert.equal(td[1].find("STRONG").length, 1);
 });
 
 test("a web link opens through Rust; a file link is shown by Rust; anything else is plain text", () => {

@@ -50,10 +50,22 @@ export interface CodeSession {
 
 /** A conversation's line (code.rs Message): a step carries its tool, worded on this side. */
 export interface CodeMessage {
-  role: "user" | "assistant" | "step";
+  /** "compacted": where Claude Code summarized the conversation before it. */
+  role: "user" | "assistant" | "step" | "compacted";
   text: string;
   tool?: string;
   input?: Record<string, unknown>;
+  /** A compaction's: how big the conversation was, in tokens. */
+  tokens?: number;
+}
+
+/** An entry of the `/` menu as Claude Code lists it (code.rs SlashCommand): built in, a skill, a plugin's. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  aliases: string[];
+  builtin: boolean;
 }
 
 /** How a run works: a permission mode of the picker, an effort and a model (null = Claude Code's). */
@@ -77,10 +89,86 @@ export interface SetupStatus {
   elsewhere: number;
 }
 
+/** Something a plugin runs by itself (addons.rs Run): "remote" is a server at an address it connects to. */
+export interface AddonRun {
+  kind: "hook" | "server" | "remote" | "lsp";
+  name: string;
+  detail: string;
+}
+
+/** A plugin a marketplace offers; `unknown`: it can't be looked inside before it is installed. */
+export interface MarketPlugin {
+  name: string;
+  description: string;
+  commands: string[];
+  runs: AddonRun[];
+  unknown: boolean;
+  installed: boolean;
+}
+
+/** What Settings shows before installing something added by hand (addons.rs Preview). */
+export interface AddonPreview {
+  id: string;
+  kind: "skill" | "skills" | "command" | "plugin" | "marketplace";
+  name: string;
+  description: string;
+  commands: string[];
+  runs: AddonRun[];
+  replaces: boolean;
+  problem: string | null;
+  plugins: MarketPlugin[];
+}
+
+/** A plugin Claude Code has (addons.rs InstalledPlugin). */
+export interface InstalledPlugin {
+  id: string;
+  name: string;
+  marketplace: string;
+  version: string;
+  enabled: boolean;
+  description: string;
+  commands: string[];
+  servers: number;
+  hooks: number;
+  source: "directory" | "official" | "managed" | "yours" | "other";
+}
+
+export interface MySkill {
+  name: string;
+  kind: "skill" | "command";
+  /** Its SKILL.md, or its .md. */
+  path: string;
+}
+
+export interface NewSkill {
+  name: string;
+  description: string;
+  hint: string;
+  instructions: string;
+  /** Claude may use it by itself, not only when it is typed. */
+  auto: boolean;
+}
+
+/** A conversation's totals (code.rs SessionUsage): cost in US dollars, durations in milliseconds. */
+export interface SessionUsage {
+  project: string;
+  session: string;
+  title: string;
+  costUsd: number;
+  /** Time spent waiting on the API. */
+  apiMs: number;
+  /** Time since it started, all its runs together. */
+  wallMs: number;
+  linesAdded: number;
+  linesRemoved: number;
+  /** A model with no known price was used: the cost leaves it out. */
+  unknownCost: boolean;
+}
+
 /** One `code-run` event: what code.rs `events` makes of Claude Code's stream. */
 export interface CodeRunEvent {
   run: number;
-  kind: "init" | "text" | "tool" | "result" | "exit";
+  kind: "init" | "text" | "tool" | "result" | "exit" | "compacting" | "compacted" | "compact_failed" | "compact_skipped" | "title";
   session?: string | null;
   text?: string;
   tool?: string;
@@ -88,6 +176,8 @@ export interface CodeRunEvent {
   error?: boolean;
   /** On a result: background tasks still running, which keep the run alive between turns. */
   background?: number;
+  /** On "compacted": how big the conversation was, in tokens. ("title": `text` is the session's new name.) */
+  tokens?: number | null;
 }
 
 export const Bridge = {
@@ -121,7 +211,7 @@ export const Bridge = {
   openSettingsWindow: (page?: string) => call<void>("open_settings_window", { page }),
   /** The first-run screen (setup.rs): what is missing, and the steps it starts. */
   setupStatus: () => callOrThrow<SetupStatus>("setup_status"),
-  setupStart: (step: "install" | "login") => callOrThrow<void>("setup_start", { step }),
+  setupStart: (step: "install" | "login" | "logout") => callOrThrow<void>("setup_start", { step }),
 
   /** Writes to %LOCALAPPDATA%\Buddybara\buddybara.log, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),
@@ -190,6 +280,28 @@ export const Bridge = {
   pluginInstall: (id: string) => callOrThrow<void>("plugin_install", { id }),
   pluginUninstall: (id: string) => callOrThrow<void>("plugin_uninstall", { id }),
 
+  // ── Skills and plugins added by hand (src-tauri/src/addons.rs) ─────────────
+  /** A file (or a folder) picked in a dialog: one `addonInspect` may then look inside. */
+  addonPick: (folder: boolean) => callOrThrow<string | null>("addon_pick", { folder }),
+  /** A picked or dropped path, copied and looked inside; nothing is installed yet. */
+  addonInspect: (path: string) => callOrThrow<AddonPreview>("addon_inspect", { path }),
+  /** A marketplace's link, added by Claude Code; its plugins come back to install one by one. */
+  addonAddMarketplace: (link: string) => callOrThrow<AddonPreview>("addon_add_marketplace", { link }),
+  /** What was looked inside, installed; `trust`: it may run what it runs. Resolves to the /commands it brought. */
+  addonInstall: (id: string, trust: boolean) => callOrThrow<string[]>("addon_install", { id, trust }),
+  /** One plugin of a marketplace that was looked inside or added. */
+  addonInstallFrom: (id: string, plugin: string, trust: boolean) =>
+    callOrThrow<string[]>("addon_install_from", { id, plugin, trust }),
+  pluginsInstalled: () => callOrThrow<InstalledPlugin[]>("plugins_installed"),
+  /** On, off, update or uninstall an installed plugin, by its `name@marketplace`. */
+  pluginAction: (id: string, action: "enable" | "disable" | "update" | "uninstall") =>
+    callOrThrow<void>("plugin_action", { id, action }),
+  /** The user's own skills and commands (~/.claude/skills, ~/.claude/commands). */
+  skillsMine: () => callOrThrow<MySkill[]>("skills_mine"),
+  skillRemove: (name: string, kind: MySkill["kind"]) => callOrThrow<void>("skill_remove", { name, kind }),
+  /** Writes a new skill; resolves to its name, now a /command. */
+  skillCreate: (form: NewSkill) => callOrThrow<string>("skill_create", { form }),
+
   // ── Connectors: Claude Code's MCP servers (src-tauri/src/mcp.rs) ──────────
   /** The catalog alone, at once (every state "missing"). */
   mcpCatalog: async () => (await call<McpEntry[]>("mcp_catalog")) ?? [],
@@ -221,6 +333,20 @@ export const Bridge = {
   codeSessions: (project: string) => callOrThrow<CodeSession[]>("code_sessions", { project }),
   codeMessages: (project: string, session: string) =>
     callOrThrow<CodeMessage[]>("code_messages", { project, session }),
+  /** What the `/` menu offers in a project, as Claude Code lists it (a second or two); null: no project's (Settings). */
+  codeCommands: (project: string | null) => callOrThrow<SlashCommand[]>("code_commands", { project }),
+  /** A conversation's totals as Claude Code keeps them (code.rs usage); null session: the newest with some. */
+  codeUsage: (project: string | null, session: string | null) =>
+    callOrThrow<SessionUsage | null>("code_usage", { project, session }),
+  /** Whether Claude Code is mid-turn in a session (at work, or waiting on the user): code.rs turn_open. */
+  codeTurnOpen: (project: string, session: string) => callOrThrow<boolean>("code_turn_open", { project, session }),
+  /** /usage: Settings → Claude Code, its Usage on that conversation. */
+  openSettingsUsage: (project: string | null, session: string | null) =>
+    call<void>("open_settings_usage", { project, session }),
+  /** /memory: opens the project's CLAUDE.md files in VS Code; resolves to how many. */
+  codeMemory: (project: string) => callOrThrow<number>("code_memory", { project }),
+  /** Settings → Skills → Use: the panel opens with `text` (a command) typed, not sent. */
+  panelUse: (text: string) => callOrThrow<void>("panel_use", { text }),
   /** Names a session as Claude Code's rename does; resolves to the name as kept. */
   codeRenameSession: (project: string, session: string, name: string) =>
     callOrThrow<string>("code_rename_session", { project, session, name }),

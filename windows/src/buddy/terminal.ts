@@ -1,7 +1,9 @@
 // The buddy's terminal (src-tauri/src/terminal.rs): interactive Claude Code in
 // a real console, drawn here by xterm.js — for what a `claude -p` run can't
 // do: /mcp sign-ins, /login, anything that asks. Opened on a conversation, it
-// resumes that session; on a project's list, it starts a new one there.
+// resumes that session; on a project's list, it starts a new one there. A
+// message sent from the panel in that conversation quits it between turns
+// (quit, buddy.ts takeFromTerminal), and opening it again resumes it.
 
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -15,6 +17,12 @@ import { h } from "../views/dom";
 
 /** Its text at the usual size; Settings → Customization's text size scales it. */
 const TERMINAL_FONT_PX = 12;
+
+/** quit(): between its Ctrl+Cs, and how long Claude Code gets to end before it is closed. */
+const QUIT_GAP_MS = 150;
+const QUIT_WAIT_MS = 2500;
+
+const sleep = (ms: number) => new Promise<void>((done) => window.setTimeout(done, ms));
 
 /** Where it runs: a project folder, and the session it resumes (null: a new one). */
 export interface TermTarget {
@@ -35,6 +43,8 @@ export class BuddyTerminal {
   /** Its screen as it came before terminal_open answered with its id, by id. */
   private early = new Map<number, string[]>();
   private earlyEnd = new Set<number>();
+  /** quit() waiting for Claude Code to end. */
+  private waiting: (() => void)[] = [];
 
   /** `ended`: Claude Code exited (read the session again). `leave`: back to the conversation. */
   constructor(
@@ -100,6 +110,25 @@ export class BuddyTerminal {
     if (this.id != null && !this.ended) void Bridge.terminalClose(this.id);
   }
 
+  /**
+   * Claude Code quits as the user would quit it: Ctrl+C, three times (the
+   * first clears a draft or shuts a menu, then twice is Claude Code's own
+   * exit). Ctrl+C only ever cancels: it never answers yes to anything. Still
+   * running after that, it is closed like a window. Resolves once it ended.
+   */
+  async quit() {
+    const id = this.id;
+    if (id == null || this.ended) return;
+    const gone = new Promise<void>((done) => this.waiting.push(done));
+    for (let i = 0; i < 3 && !this.ended; i++) {
+      void Bridge.terminalWrite(id, "\x03");
+      await sleep(QUIT_GAP_MS);
+    }
+    if (await Promise.race([gone.then(() => true), sleep(QUIT_WAIT_MS).then(() => false)])) return;
+    void Bridge.terminalClose(id);
+    await Promise.race([gone, sleep(QUIT_WAIT_MS)]);
+  }
+
   private keep(id: number, data: string) {
     const kept = this.early.get(id) ?? [];
     kept.push(data);
@@ -110,6 +139,7 @@ export class BuddyTerminal {
     if (this.ended) return;
     this.ended = true;
     this.xterm?.write(`\r\n\x1b[2m${t("Claude Code ended. Press any key to go back.")}\x1b[0m\r\n`);
+    for (const done of this.waiting.splice(0)) done();
     if (this.target) this.onEnded(this.target);
   }
 

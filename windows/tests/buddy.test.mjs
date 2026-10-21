@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MAX_ATTACHMENTS, MAX_PROMPT, ago, applyRunEvent, dropQueue, folderOf, lineOf, makeChat, mergeQueued, pastedName,
-  sentLength, splitAttachments, takeQueue, tooBig,
+  sentLength, splitAttachments, takeQueue, tokensShort, tooBig,
 } from "../src/buddy/run.ts";
 
 const chat = () => makeChat({ name: "p", path: "C:\\p", sessions: 0, last: 0 }, null, "");
@@ -66,6 +66,57 @@ test("a conversation read back from its file reads like the live run, steps and 
       { role: "step", text: "SomethingNew" },
     ],
   );
+});
+
+test("compacting shows while it runs, then how big the conversation was", () => {
+  const c = chat();
+  c.lines.push({ role: "user", text: "hi" }, { role: "assistant", text: "Hello." }, { role: "user", text: "/compact" });
+  applyRunEvent(c, { run: 1, kind: "compacting" });
+  // Said twice, it is still one line.
+  applyRunEvent(c, { run: 1, kind: "compacting" });
+  assert.deepEqual(c.lines.slice(3), [{ role: "compacting", text: "" }]);
+  applyRunEvent(c, { run: 1, kind: "compacted", tokens: 73870 });
+  applyRunEvent(c, { run: 1, kind: "result", text: "" });
+  assert.deepEqual(c.lines.slice(3), [{ role: "compacted", text: "", tokens: 73870 }]);
+
+  // When the context fills mid-turn: the answer before the compaction isn't repeated by the result.
+  const auto = chat();
+  auto.lines.push({ role: "user", text: "go" });
+  applyRunEvent(auto, { run: 1, kind: "text", text: "Working on it." });
+  applyRunEvent(auto, { run: 1, kind: "compacting" });
+  applyRunEvent(auto, { run: 1, kind: "compacted", tokens: null });
+  applyRunEvent(auto, { run: 1, kind: "result", text: "Working on it." });
+  assert.deepEqual(auto.lines.slice(1), [{ role: "assistant", text: "Working on it." }, { role: "compacted", text: "" }]);
+
+  // A failure takes the waiting line away and says why; one that never ends goes with the turn.
+  const failed = chat();
+  applyRunEvent(failed, { run: 1, kind: "compacting" });
+  applyRunEvent(failed, { run: 1, kind: "compact_failed", text: "Not enough messages to compact." });
+  assert.deepEqual(failed.lines, [{ role: "error", text: "Not enough messages to compact." }]);
+  const cancelled = chat();
+  applyRunEvent(cancelled, { run: 1, kind: "compacting" });
+  applyRunEvent(cancelled, { run: 1, kind: "result", text: "" });
+  assert.deepEqual(cancelled.lines, []);
+  // An automatic one found not needed goes at once, the turn carrying on.
+  const skipped = chat();
+  applyRunEvent(skipped, { run: 1, kind: "text", text: "Reading." });
+  applyRunEvent(skipped, { run: 1, kind: "compacting" });
+  applyRunEvent(skipped, { run: 1, kind: "compact_skipped" });
+  applyRunEvent(skipped, { run: 1, kind: "tool", tool: "Read", input: { file_path: "C:\\p\\a.ts" } });
+  assert.deepEqual(skipped.lines, [{ role: "assistant", text: "Reading." }, { role: "step", text: "Reads · a.ts" }]);
+
+  assert.deepEqual(lineOf({ role: "compacted", text: "", tokens: 964057 }), { role: "compacted", text: "", tokens: 964057 });
+  assert.deepEqual(lineOf({ role: "compacted", text: "" }), { role: "compacted", text: "" });
+  assert.deepEqual([850, 73870, 999_400, 964_057, 1_234_567].map(tokensShort), ["850", "74k", "999k", "964k", "1.2M"]);
+});
+
+test("a session renamed with /rename takes its new name; a side question keeps its own", () => {
+  const c = chat();
+  applyRunEvent(c, { run: 1, kind: "title", text: "Mic fixes" });
+  assert.equal(c.title, "Mic fixes");
+  const side = { ...chat(), side: true, title: "s1" };
+  applyRunEvent(side, { run: 1, kind: "title", text: "Mic fixes" });
+  assert.equal(side.title, "s1");
 });
 
 test("only the list code.rs puts after a prompt is read as its files", () => {

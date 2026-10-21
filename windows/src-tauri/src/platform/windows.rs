@@ -227,17 +227,31 @@ fn shell_open(target: &str) {
 /// apartment, so it never disturbs the main thread's — call it off the UI
 /// thread (lib.rs spawns it on the blocking pool).
 pub fn pick_folder(owner: Option<isize>, start: Option<PathBuf>) -> Option<PathBuf> {
+    pick(owner, start, None)
+}
+
+/// The same dialog for one file, of the kinds `types` names: what it is
+/// called, and its patterns (`*.zip;*.skill`).
+pub fn pick_file(owner: Option<isize>, types: (&str, &str)) -> Option<PathBuf> {
+    pick(owner, None, Some(types))
+}
+
+fn pick(owner: Option<isize>, start: Option<PathBuf>, file: Option<(&str, &str)>) -> Option<PathBuf> {
     use std::os::windows::ffi::OsStrExt;
     use ::windows::core::PCWSTR;
     use ::windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, IBindCtx,
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
     };
+    use ::windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
     use ::windows::Win32::UI::Shell::{
         FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName,
-        FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
+        FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
     };
 
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    // Kept alive until the dialog is gone: it reads them while it shows.
+    let types = file.map(|(name, patterns)| (wide(name), wide(patterns)));
     unsafe {
         // S_FALSE means it was already initialised on this thread; either way a
         // successful init is balanced by one CoUninitialize below.
@@ -245,7 +259,14 @@ pub fn pick_folder(owner: Option<isize>, start: Option<PathBuf>) -> Option<PathB
         let picked = (|| {
             let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
             let options = dialog.GetOptions().ok()?;
-            dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM).ok()?;
+            match &types {
+                Some((name, patterns)) => {
+                    dialog.SetOptions(options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM).ok()?;
+                    let spec = [COMDLG_FILTERSPEC { pszName: PCWSTR(name.as_ptr()), pszSpec: PCWSTR(patterns.as_ptr()) }];
+                    dialog.SetFileTypes(&spec).ok()?;
+                }
+                None => dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM).ok()?,
+            }
             if let Some(dir) = start.filter(|p| p.is_dir()) {
                 let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
                 let item: ::windows::core::Result<IShellItem> =

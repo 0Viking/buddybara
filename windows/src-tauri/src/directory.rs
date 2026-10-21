@@ -112,7 +112,7 @@ fn install_names() -> HashMap<String, String> {
 }
 
 /// What Claude Code has installed, by its id ("name@marketplace").
-fn installed() -> HashSet<String> {
+pub(crate) fn installed() -> HashSet<String> {
     let path = platform::home_dir().join(".claude").join("plugins").join("installed_plugins.json");
     let Ok(bytes) = std::fs::read(path) else { return HashSet::new() };
     let Ok(file) = serde_json::from_slice::<Value>(&bytes) else { return HashSet::new() };
@@ -185,7 +185,7 @@ pub async fn directory_section(kind: String, category: String) -> Result<Vec<Ent
 }
 
 /// What `claude plugin … --json` said went wrong: its message, not the JSON around it.
-fn message_of(err: String) -> String {
+pub(crate) fn message_of(err: String) -> String {
     let Ok(v) = serde_json::from_str::<Value>(&err) else { return err };
     ["/error/message", "/error", "/message"]
         .iter()
@@ -302,9 +302,9 @@ fn install_name(id: &str) -> Result<String, String> {
 /// runs a command to install is left to Claude Code's /plugin, where the
 /// command is shown before anything runs: nothing here ever accepts it.
 #[tauri::command]
-pub async fn plugin_install(id: String) -> Result<(), String> {
+pub async fn plugin_install(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let name = install_name(&id)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let done = tauri::async_runtime::spawn_blocking(move || {
         let target = format!("{name}@{MARKETPLACE}");
         match mcp::claude(&["plugin", "install", &target, "--json"], INSTALL_LIMIT) {
             Ok(_) => Ok(()),
@@ -315,17 +315,26 @@ pub async fn plugin_install(id: String) -> Result<(), String> {
         }
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    // The panel's `/` menu has its commands now.
+    if done.is_ok() {
+        crate::addons::changed(&app);
+    }
+    done
 }
 
 /// Uninstalls Directory entry `id`, from whichever marketplace it came.
 #[tauri::command]
-pub async fn plugin_uninstall(id: String) -> Result<(), String> {
+pub async fn plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let name = install_name(&id)?;
     let target = installed_id(&installed(), &name).unwrap_or_else(|| format!("{name}@{MARKETPLACE}"));
-    tauri::async_runtime::spawn_blocking(move || mcp::claude(&["plugin", "uninstall", &target, "--json"], INSTALL_LIMIT).map(|_| ()).map_err(message_of))
+    let done = tauri::async_runtime::spawn_blocking(move || mcp::claude(&["plugin", "uninstall", &target, "--json"], INSTALL_LIMIT).map(|_| ()).map_err(message_of))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    if done.is_ok() {
+        crate::addons::changed(&app);
+    }
+    done
 }
 
 #[cfg(test)]
