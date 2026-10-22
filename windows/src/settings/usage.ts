@@ -5,7 +5,7 @@
 // key has no plan limits, and a conversation may have no totals saved yet.
 
 import { Bridge, type SessionUsage } from "../core/bridge";
-import { parseClaudeAccountUsage, type PlanUsage } from "../core/plan";
+import { parseClaudeUsageText, type PlanUsage } from "../core/plan";
 import { duration, usd } from "../core/cost";
 import { planRows } from "../buddy/usage";
 import { h } from "../views/dom";
@@ -23,7 +23,7 @@ let plan: { usage: PlanUsage | null; at: number } | null = null;
 
 async function planUsage(): Promise<PlanUsage | null> {
   if (plan && Date.now() - plan.at < PLAN_FRESH_MS) return plan.usage;
-  const usage = parseClaudeAccountUsage(await Bridge.claudePlanUsage());
+  const usage = parseClaudeUsageText(await Bridge.claudePlanUsage());
   plan = { usage, at: Date.now() };
   return usage;
 }

@@ -1,7 +1,7 @@
 // The Claude plan's usage, with no DOM so it can be tested on its own. The
-// numbers come from the account (what Claude Code's /usage shows), asked by
-// Rust with Claude Code's own sign-in (claude.rs plan_usage), or from Claude
-// Code's status line (`rate_limits`) when a terminal session runs the relay.
+// numbers are what Claude Code's own /usage says (claude.rs plan_usage: Claude
+// Code asks the account with its sign-in, which Buddybara never reads), or
+// Claude Code's status line (`rate_limits`) when a terminal session runs the relay.
 // Pro and Max only. They show on the mikan (island/desktop.ts).
 
 export interface PlanWindow {
@@ -38,18 +38,43 @@ function parseClaudeWindow(raw: unknown, now: number): PlanWindow | undefined {
   return { usedPct: Math.min(100, pct), resetsAt: epoch * 1000 };
 }
 
-/** The account's answer, `{ five_hour, seven_day }` with `utilization` (0–100) and an ISO `resets_at`. */
-export function parseClaudeAccountUsage(raw: unknown, now = Date.now()): PlanUsage | null {
-  const r = asObj(raw);
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/**
+ * One line of Claude Code's /usage: "Current session: 15% used · resets Oct 23,
+ * 12:50am (America/Sao_Paulo)". The reset is in this computer's own time zone
+ * (Claude Code runs here); a line without a date resets today, or tomorrow
+ * once that time has passed.
+ */
+function usageLine(text: string, label: string, now: number): PlanWindow | undefined {
+  const m = new RegExp(
+    `${label}[^:\\n]*:\\s*(\\d+(?:\\.\\d+)?)% used\\s*·\\s*resets\\s+(?:([a-z]{3})[a-z]*\\.?\\s+(\\d{1,2}),?\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)`,
+    "i",
+  ).exec(text);
+  if (!m) return undefined;
+  const pct = Number(m[1]);
+  if (pct < 0 || pct > 200) return undefined;
+  const today = new Date(now);
+  const month = m[2] ? MONTHS.indexOf(m[2].toLowerCase()) : today.getMonth();
+  if (month < 0) return undefined;
+  const hour = (Number(m[4]) % 12) + (m[6].toLowerCase() === "pm" ? 12 : 0);
+  const at = new Date(today.getFullYear(), month, m[3] ? Number(m[3]) : today.getDate(), hour, Number(m[5] ?? 0));
+  // A reset is always ahead: without a date, a time already past is tomorrow's;
+  // a date more than a day behind is next year's.
+  if (!m[3] && at.getTime() <= now) at.setDate(at.getDate() + 1);
+  else if (at.getTime() < now - DAY_MS) at.setFullYear(at.getFullYear() + 1);
+  return { usedPct: Math.min(100, pct), resetsAt: at.getTime() };
+}
+
+/** What `claude -p /usage` prints (claude.rs plan_usage), or null when it has neither window (an API key, not signed in). */
+export function parseClaudeUsageText(text: unknown, now = Date.now()): PlanUsage | null {
+  if (typeof text !== "string") return null;
   const usage: PlanUsage = { updatedAt: now };
-  for (const [key, field] of [["five_hour", "fiveHour"], ["seven_day", "sevenDay"]] as const) {
-    const w = asObj(r?.[key]);
-    const pct = w?.utilization;
-    const at = typeof w?.resets_at === "string" ? Date.parse(w.resets_at) : NaN;
-    if (isNum(pct) && pct >= 0 && pct <= 200 && Number.isFinite(at)) {
-      usage[field] = { usedPct: Math.min(100, pct), resetsAt: at };
-    }
-  }
+  const fiveHour = usageLine(text, "Current session", now);
+  // "Current week (all models)" comes before any per-model week.
+  const sevenDay = usageLine(text, "Current week", now);
+  if (fiveHour) usage.fiveHour = fiveHour;
+  if (sevenDay) usage.sevenDay = sevenDay;
   return usage.fiveHour || usage.sevenDay ? usage : null;
 }
 

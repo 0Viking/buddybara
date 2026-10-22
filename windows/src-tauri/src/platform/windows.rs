@@ -25,7 +25,7 @@ use ::windows::Win32::UI::Shell::{
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos, GetSystemMetrics, GetWindow,
-    GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    GetWindowLongPtrW, GetWindowThreadProcessId, IsWindowVisible,
     SetWindowLongPtrW, GWL_EXSTYLE, GW_OWNER, SM_SWAPBUTTON, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
@@ -498,26 +498,24 @@ pub fn process_ancestors(pid: u32) -> Vec<u32> {
     session_window::ancestors(&process_table(), pid)
 }
 
-/// Visible top-level windows that are nobody's dialog and have a title:
-/// (handle, process ID, title).
-fn top_windows() -> Vec<(isize, u32, String)> {
+/// The processes that own a visible top-level window that is nobody's dialog
+/// and no tool window: an app's own windows, as the taskbar shows them. Only
+/// who owns them: their titles are never read.
+fn windowed_processes() -> Vec<u32> {
     unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let list = unsafe { &mut *(lparam.0 as *mut Vec<(isize, u32, String)>) };
+        let list = unsafe { &mut *(lparam.0 as *mut Vec<u32>) };
         unsafe {
-            if !IsWindowVisible(hwnd).as_bool() || GetWindow(hwnd, GW_OWNER).is_ok() {
+            let tool = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW.0 as isize != 0;
+            if !IsWindowVisible(hwnd).as_bool() || GetWindow(hwnd, GW_OWNER).is_ok() || tool {
                 return true.into();
             }
             let mut pid = 0u32;
             GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
-            let mut text = [0u16; 512];
-            let len = GetWindowTextW(hwnd, &mut text);
-            if len > 0 {
-                list.push((hwnd.0 as isize, pid, String::from_utf16_lossy(&text[..len as usize])));
-            }
+            list.push(pid);
         }
         true.into()
     }
-    let mut list: Vec<(isize, u32, String)> = Vec::new();
+    let mut list: Vec<u32> = Vec::new();
     unsafe {
         let _ = EnumWindows(Some(collect), LPARAM(&mut list as *mut _ as isize));
     }
@@ -526,8 +524,8 @@ fn top_windows() -> Vec<(isize, u32, String)> {
 
 /// The first of `pids` that owns a window.
 pub fn first_with_window(pids: &[u32]) -> Option<u32> {
-    let windows = top_windows();
-    pids.iter().copied().find(|pid| windows.iter().any(|(_, owner, _)| owner == pid))
+    let owners = windowed_processes();
+    pids.iter().copied().find(|pid| owners.contains(pid))
 }
 
 /// What a session remembers: the ancestor that owns a window, or nothing.

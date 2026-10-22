@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  dominantPct, effectivePct, parseClaudeAccountUsage, parseClaudePlan, planColor, restorePlanUsage,
+  dominantPct, effectivePct, parseClaudePlan, parseClaudeUsageText, planColor, restorePlanUsage,
 } from "../src/core/plan.ts";
 import { emit } from "./tauri.mjs";
 import { registerHookHandlers } from "../src/island/hooks.ts";
@@ -101,19 +101,30 @@ test("the last Claude numbers survive a restart, and junk does not", () => {
   assert.equal(restorePlanUsage(JSON.stringify({ updatedAt: NOW, fiveHour: { usedPct: 900, resetsAt: 1 } })), null);
 });
 
-// ── The account (claude.rs plan_usage) ────────────────────────────────────────
+// ── Claude Code's /usage (claude.rs plan_usage) ────────────────────────────────
 
-test("the account's windows: utilization and an ISO reset, junk dropped", () => {
-  const iso = new Date(future * 1000).toISOString();
-  const u = parseClaudeAccountUsage({
-    five_hour: { utilization: 18, resets_at: iso },
-    seven_day: { utilization: 140, resets_at: iso },
-  }, NOW);
-  assert.deepEqual(u.fiveHour, { usedPct: 18, resetsAt: future * 1000 });
-  assert.equal(u.sevenDay.usedPct, 100);
-  assert.equal(parseClaudeAccountUsage({ five_hour: { utilization: "18", resets_at: iso } }, NOW), null);
-  assert.equal(parseClaudeAccountUsage({ five_hour: { utilization: 18, resets_at: "soon" } }, NOW), null);
-  assert.equal(parseClaudeAccountUsage(null, NOW), null);
+test("/usage: the session and the week (all models), resets in local time", () => {
+  const now = new Date(2026, 9, 22, 20, 0).getTime();
+  const text = [
+    "You are currently using your subscription to power your Claude Code usage",
+    "",
+    "Current session: 15% used · resets Oct 23, 12:50am (America/Sao_Paulo)",
+    "Current week (all models): 18% used · resets Oct 27, 10pm (America/Sao_Paulo)",
+    "Current week (Sonnet only): 3% used · resets Oct 27, 10pm (America/Sao_Paulo)",
+  ].join("
+");
+  const u = parseClaudeUsageText(text, now);
+  assert.deepEqual(u.fiveHour, { usedPct: 15, resetsAt: new Date(2026, 9, 23, 0, 50).getTime() });
+  assert.deepEqual(u.sevenDay, { usedPct: 18, resetsAt: new Date(2026, 9, 27, 22, 0).getTime() });
+  // A time alone is today, or tomorrow once past; a date behind is next year's.
+  assert.equal(parseClaudeUsageText("Current session: 5% used · resets 9pm", now).fiveHour.resetsAt, new Date(2026, 9, 22, 21, 0).getTime());
+  assert.equal(parseClaudeUsageText("Current session: 5% used · resets 7pm", now).fiveHour.resetsAt, new Date(2026, 9, 23, 19, 0).getTime());
+  const eve = new Date(2026, 11, 31, 23, 0).getTime();
+  assert.equal(parseClaudeUsageText("Current week: 40% used · resets Jan 1, 2am", eve).sevenDay.resetsAt, new Date(2027, 0, 1, 2, 0).getTime());
+  assert.equal(parseClaudeUsageText("Current session: 140% used · resets 9pm", now).fiveHour.usedPct, 100);
+  // An API key has no plan, and nothing else is a usage.
+  assert.equal(parseClaudeUsageText("You are using an API key.", now), null);
+  assert.equal(parseClaudeUsageText(null, now), null);
 });
 
 // ── The status line relay ─────────────────────────────────────────────────────

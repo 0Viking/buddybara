@@ -1167,17 +1167,6 @@
    "ru": "Ключи, которые может использовать Claude: их получают запуски из компаньона и его терминала. Они хранятся в {store}, а не на диске.",
    "id": "Kunci yang bisa dipakai Claude: proses yang dimulai dari buddy dan terminalnya mendapatkannya. Kunci disimpan di {store}, tidak pernah di disk."
   },
-  "Shows your Claude plan usage (5-hour and weekly limits) on the mikan. It is read from your Claude account every few minutes, with the sign-in Claude Code keeps on this computer, and goes nowhere else. Pro and Max plans only.": {
-   "zh-Hans": "在橘子上显示你的 Claude 计划用量（5 小时及每周限额）。每隔几分钟用 Claude Code 在这台电脑上保存的登录信息从你的 Claude 账户读取，不会发送到别处。仅限 Pro 和 Max 计划。",
-   "hi": "संतरे पर आपके Claude प्लान का उपयोग (5 घंटे और साप्ताहिक सीमाएं) दिखाता है। इसे हर कुछ मिनट में आपके Claude खाते से पढ़ा जाता है, उसी साइन-इन से जो Claude Code इस कंप्यूटर पर रखता है, और यह कहीं और नहीं जाता। केवल Pro और Max प्लान के लिए।",
-   "es": "Muestra el uso de tu plan Claude (límites de 5 horas y semanales) en la mandarina. Se lee de tu cuenta de Claude cada pocos minutos, con el inicio de sesión que Claude Code guarda en este equipo, y no va a ningún otro sitio. Solo planes Pro y Max.",
-   "ar": "يعرض استخدام خطة Claude (الحدود الخمس ساعات والأسبوعية) على اليوسفي. يُقرأ من حساب Claude كل بضع دقائق، بتسجيل الدخول الذي يحفظه Claude Code على هذا الكمبيوتر، ولا يُرسل إلى أي مكان آخر. للخططَين Pro وMax فقط.",
-   "fr": "Affiche ton utilisation du forfait Claude (limites de 5 heures et hebdomadaire) sur la mandarine. Elle est lue sur ton compte Claude toutes les quelques minutes, avec la connexion que Claude Code garde sur cet ordinateur, et ne va nulle part ailleurs. Forfaits Pro et Max uniquement.",
-   "bn": "কমলার ওপর আপনার Claude প্ল্যানের ব্যবহার (৫ ঘণ্টা ও সাপ্তাহিক সীমা) দেখায়। Claude Code এই কম্পিউটারে যে সাইন-ইন রাখে তা দিয়ে কয়েক মিনিট পরপর আপনার Claude অ্যাকাউন্ট থেকে পড়া হয়, আর এটি অন্য কোথাও যায় না। শুধুমাত্র Pro এবং Max প্ল্যানের জন্য।",
-   "pt-BR": "Mostra o uso do seu plano Claude (limites de 5 horas e semanais) na tangerina. Ele é lido da sua conta Claude a cada poucos minutos, com o login que o Claude Code guarda neste computador, e não vai para nenhum outro lugar. Apenas planos Pro e Max.",
-   "ru": "Показывает использование плана Claude (лимиты на 5 часов и на неделю) на мандарине. Данные читаются из вашего аккаунта Claude каждые несколько минут — со входом, который Claude Code хранит на этом компьютере, — и больше никуда не отправляются. Только для планов Pro и Max.",
-   "id": "Menampilkan penggunaan paket Claude (batas 5 jam dan mingguan) di jeruk. Dibaca dari akun Claude Anda setiap beberapa menit, dengan login yang disimpan Claude Code di komputer ini, dan tidak dikirim ke mana pun. Hanya untuk paket Pro dan Max."
-  },
   "Show on the mikan": {
    "zh-Hans": "在橘子上显示",
    "hi": "संतरे पर दिखाएं",
@@ -5606,6 +5595,17 @@
    "pt-BR": "O plugin não conseguiu fazer isso.",
    "ru": "Плагин не смог это сделать.",
    "id": "Plugin tidak bisa melakukannya."
+  },
+  "Shows your Claude plan usage (5-hour and weekly limits) on the mikan. Claude Code reports it every few minutes with its own sign-in, which Buddybara never reads. Pro and Max plans only.": {
+   "zh-Hans": "在橘子上显示你的 Claude 套餐用量（5 小时和每周限额）。由 Claude Code 每隔几分钟用它自己的登录信息报告，Buddybara 从不读取这些登录信息。仅限 Pro 和 Max 套餐。",
+   "hi": "संतरे पर आपके Claude प्लान का उपयोग (5 घंटे और साप्ताहिक सीमाएँ) दिखाता है। Claude Code इसे हर कुछ मिनट में अपने ही साइन-इन से बताता है, जिसे Buddybara कभी नहीं पढ़ता। सिर्फ़ Pro और Max प्लान।",
+   "es": "Muestra el uso de tu plan de Claude (límites de 5 horas y semanal) en la mandarina. Claude Code lo informa cada pocos minutos con su propio inicio de sesión, que Buddybara nunca lee. Solo planes Pro y Max.",
+   "ar": "يعرض استخدام خطة Claude الخاصة بك (حدود الـ 5 ساعات والأسبوع) على اليوسفي. يبلّغ عنه Claude Code كل بضع دقائق بتسجيل دخوله الخاص، الذي لا يقرؤه Buddybara أبدًا. لخطط Pro وMax فقط.",
+   "fr": "Affiche l'usage de ton forfait Claude (limites sur 5 heures et à la semaine) sur la mandarine. Claude Code le rapporte toutes les quelques minutes avec sa propre connexion, que Buddybara ne lit jamais. Forfaits Pro et Max uniquement.",
+   "bn": "কমলার ওপর আপনার Claude প্ল্যানের ব্যবহার (৫ ঘণ্টা ও সাপ্তাহিক সীমা) দেখায়। Claude Code কয়েক মিনিট পরপর নিজের সাইন-ইন দিয়ে এটি জানায়, যা Buddybara কখনো পড়ে না। শুধু Pro ও Max প্ল্যান।",
+   "pt-BR": "Mostra o uso do seu plano Claude (limites de 5 horas e semanal) na tangerina. O Claude Code informa a cada poucos minutos com o próprio login, que o Buddybara nunca lê. Só planos Pro e Max.",
+   "ru": "Показывает использование вашего тарифа Claude (лимиты на 5 часов и на неделю) на мандарине. Claude Code сообщает его каждые несколько минут через собственный вход, который Buddybara никогда не читает. Только тарифы Pro и Max.",
+   "id": "Menampilkan pemakaian paket Claude Anda (batas 5 jam dan mingguan) di jeruk. Claude Code melaporkannya setiap beberapa menit dengan login miliknya sendiri, yang tidak pernah dibaca Buddybara. Hanya paket Pro dan Max."
   }
  }
 }

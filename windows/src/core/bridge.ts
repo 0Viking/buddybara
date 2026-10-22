@@ -264,7 +264,7 @@ export const Bridge = {
   /** Same rules as hooksApply: an explicit click, and only for the diff that was shown. */
   statusLineApply: (install: boolean, fingerprint: string) =>
     callOrThrow<string>("status_line_apply", { install, fingerprint }),
-  /** The Claude plan's windows as the account reports them (claude.rs plan_usage), or null. */
+  /** What Claude Code's /usage prints (claude.rs plan_usage), or null. */
   claudePlanUsage: () => call<unknown>("claude_plan_usage"),
 
   // ── Services: the integration pollers (src-tauri/src/integrations.rs) ─────

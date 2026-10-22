@@ -277,12 +277,12 @@ function hooksCard(status: HookStatus): HTMLElement {
 }
 
 /**
- * The 5-hour and weekly limits on the mikan, read from the account (claude.rs
+ * The 5-hour and weekly limits on the mikan, as Claude Code's /usage says (claude.rs
  * plan_usage). The status line relay that used to bring them is not needed any
  * more: while one is still in settings.json, it can be taken out here.
  */
 const PLAN_SETTINGS_TEXT = {
-  get claude() { return t("Shows your Claude plan usage (5-hour and weekly limits) on the mikan. It is read from your Claude account every few minutes, with the sign-in Claude Code keeps on this computer, and goes nowhere else. Pro and Max plans only."); },
+  get claude() { return t("Shows your Claude plan usage (5-hour and weekly limits) on the mikan. Claude Code reports it every few minutes with its own sign-in, which Buddybara never reads. Pro and Max plans only."); },
   get showClaude() { return t("Show on the mikan"); },
   get oldRelay() { return t("The status line relay is no longer needed: the usage now comes from your account."); },
 };

@@ -12,7 +12,7 @@ import { State, type AskedQuestion } from "../core/state";
 import { pillDefinition } from "../core/pills";
 import { APPROVAL_AGENTS, agentColor, agentName, validateAgent } from "./agents";
 import type { AlertView } from "../core/layout";
-import { parseClaudeAccountUsage, parseClaudePlan, restorePlanUsage } from "../core/plan";
+import { parseClaudeUsageText, parseClaudePlan, restorePlanUsage } from "../core/plan";
 import { setClaudePlanUsage, storedClaudePlanUsage } from "../views/usage";
 import { N_, t } from "../i18n/i18n";
 
@@ -242,7 +242,7 @@ const PLAN_MIN_GAP_MS = 60_000;
 let planAskedAt = -Infinity;
 
 /**
- * The plan usage from the account (claude.rs plan_usage), while it shows on the
+ * The plan usage as Claude Code's /usage says it (claude.rs plan_usage), while it shows on the
  * mikan. `force` skips the one-a-minute limit that turn ends are held to.
  */
 export function refreshClaudePlan(force = false) {
@@ -251,7 +251,7 @@ export function refreshClaudePlan(force = false) {
   if (!force && now - planAskedAt < PLAN_MIN_GAP_MS) return;
   planAskedAt = now;
   void Bridge.claudePlanUsage().then((raw) => {
-    const usage = parseClaudeAccountUsage(raw);
+    const usage = parseClaudeUsageText(raw);
     if (usage) setClaudePlanUsage(usage);
   });
 }

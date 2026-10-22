@@ -278,9 +278,9 @@ fn status_line_apply(
     Ok(backup)
 }
 
-/// Claude plan usage, asked of the account every few minutes while it shows on the mikan.
+/// Claude plan usage as Claude Code's /usage reports it, asked every few minutes while it shows.
 #[tauri::command]
-async fn claude_plan_usage() -> Option<serde_json::Value> {
+async fn claude_plan_usage() -> Option<String> {
     claude::plan_usage().await
 }
 
