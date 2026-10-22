@@ -25,7 +25,8 @@ Windows 10 or 11 (64-bit) · free and open source · no admin rights needed
 - **Skills, plugins and connectors** from Anthropic's Directory, searchable and installed for
   Claude Code in one click. Add your own from a file, a folder or a link: Buddybara shows what a
   plugin would run before anything is installed. Or write a new skill in Settings, and it's a
-  `/command` right away.
+  `/command` right away. A plugin with a panel of its own (a form, buttons) opens it in the
+  panel's drawer.
 - **More than Claude Code:** Codex, Gemini CLI, Cursor and other agents show their work here too;
   chat with other models (OpenAI, Google, OpenRouter, Ollama, LM Studio) in the panel's drawer,
   next to your Claude conversation; and keep an eye on
@@ -115,7 +116,7 @@ npx tauri build --no-bundle    # the app: windows\target\release\Buddybara.exe
 npm run pack                   # or the installer: windows\release\
 ```
 
-Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.1.0`, matching
+Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.1.1`, matching
 `windows/src-tauri/tauri.conf.json`) publishes the installer as a GitHub release.
 
 ## License
