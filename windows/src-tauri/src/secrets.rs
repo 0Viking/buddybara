@@ -4,9 +4,6 @@
 use keyring::Entry;
 
 const SERVICE: &str = "com.buddybara.app";
-/// Where the keys were kept before the rename; `get` moves them to SERVICE.
-// ponytail: one-time move, delete once both PCs have run a build with it.
-const LEGACY_SERVICE: &str = "fr.louisraille.coucou";
 
 /// Every key Buddybara may store. Anything outside this list is refused.
 pub const KNOWN_KEYS: &[&str] = &[
@@ -34,23 +31,13 @@ fn entry(key: &str) -> Option<Entry> {
 }
 
 pub fn get(key: &str) -> Option<String> {
-    let entry = entry(key)?;
-    if let Some(value) = entry.get_password().ok().filter(|v| !v.is_empty()) {
-        return Some(value);
-    }
-    let old = Entry::new(LEGACY_SERVICE, key).ok()?;
-    let value = old.get_password().ok().filter(|v| !v.is_empty())?;
-    if entry.set_password(&value).is_ok() {
-        let _ = old.delete_credential();
-    }
-    Some(value)
+    entry(key)?.get_password().ok().filter(|v| !v.is_empty())
 }
 
 pub fn set(key: &str, value: &str) -> Result<(), String> {
     let entry = entry(key).ok_or_else(|| format!("unknown key {key}"))?;
     if value.is_empty() {
         let _ = entry.delete_credential();
-        let _ = Entry::new(LEGACY_SERVICE, key).map(|old| old.delete_credential());
         return Ok(());
     }
     entry.set_password(value).map_err(|e| e.to_string())

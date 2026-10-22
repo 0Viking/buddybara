@@ -38,14 +38,9 @@ pub const HOOK_EVENTS: &[(&str, u64)] = &[
 
 /// Marker that identifies a Buddybara entry inside settings.json.
 const MARKER: &str = "buddybara-hook";
-/// What entries written before the rename carry. Still ours, so installing
-/// replaces them and removing takes them out, but they don't count as
-/// installed: they call the old relay, which nothing answers.
-// ponytail: delete once both PCs have reinstalled their hooks.
-const LEGACY_MARKER: &str = "coucou-hook";
 
 fn is_ours(command: &str) -> bool {
-    command.contains(MARKER) || command.contains(LEGACY_MARKER)
+    command.contains(MARKER)
 }
 
 fn is_current(command: &str) -> bool {
@@ -370,16 +365,6 @@ pub fn ensure_hook_exe(app: &AppHandle) {
     {
         return;
     }
-    // The user's own status line, saved beside the relay from before the rename.
-    // ponytail: delete once both PCs have run it.
-    #[cfg(windows)]
-    {
-        let old = settings::local_dir().with_file_name("Coucou").join("bin").join("statusline-previous.json");
-        if old.exists() && !status_line_previous_path().exists() {
-            let _ = std::fs::copy(&old, status_line_previous_path());
-        }
-    }
-
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(p) = app.path().resolve(platform::HOOK_EXE, tauri::path::BaseDirectory::Resource) {
         candidates.push(p);

@@ -36,7 +36,7 @@
         "minimizable": false,
         "closable": false,
         "dragDropEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI --autoplay-policy=no-user-gesture-required"
       }
     ]
   },
@@ -51,6 +51,7 @@
     ],
     "resources": { "../target/release/buddybara-hook.exe": "buddybara-hook.exe" },
     "copyright": "© Yuri Kotoman",
+    "publisher": "Yuri Kotoman",
     "category": "DeveloperTool",
     "shortDescription": "A capybara buddy for Claude Code on your desktop",
     "longDescription": "Buddybara floats on your desktop: it shows your Claude Code sessions and lets you approve, answer, chat and drop files without leaving what you are doing.",

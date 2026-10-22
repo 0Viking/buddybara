@@ -38,6 +38,8 @@ windows = { version = "0.61", features = [
   "Win32_Storage_FileSystem",
   "Win32_System_Console",
   "Win32_System_IO",
+  # Stop ends a run and all it started, held in a job object (platform::Tree).
+  "Win32_System_JobObjects",
   # "Open terminal": the relay's process tree leads to the session's window.
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_Ole",

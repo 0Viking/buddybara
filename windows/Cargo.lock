@@ -381,6 +381,7 @@ version = "1.1.1"
 dependencies = [
  "libc",
  "serde_json",
+ "tauri-winres",
  "windows 0.61.3",
 ]
 

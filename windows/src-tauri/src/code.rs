@@ -858,8 +858,8 @@ fn one_line(s: &str, max: usize) -> String {
 // ── Runs ──────────────────────────────────────────────────────────────────────
 
 static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
-/// Runs in flight: run → process id, for Stop.
-static RUNS: LazyLock<Mutex<HashMap<u64, u32>>> = LazyLock::new(Default::default);
+/// Runs in flight: run → Claude Code and all it started, for Stop.
+static RUNS: LazyLock<Mutex<HashMap<u64, platform::Tree>>> = LazyLock::new(Default::default);
 /// Runs still taking messages, until their turn's result: run → their input,
 /// and whether they may read the inbox (they started with files).
 static INPUTS: LazyLock<Mutex<HashMap<u64, (Sender<String>, bool)>>> = LazyLock::new(Default::default);
@@ -1049,7 +1049,7 @@ pub fn send(
     cmd.args(&args).current_dir(&cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = platform::no_console(&mut cmd).spawn().map_err(|e| format!("Could not start Claude Code: {e}"))?;
     let run = NEXT_RUN.fetch_add(1, Ordering::Relaxed);
-    RUNS.lock().unwrap().insert(run, child.id());
+    RUNS.lock().unwrap().insert(run, platform::Tree::hold(&child));
     // Claude Code reads its input to the end: this message, then those sent
     // while it works, written in order off this thread. The input ends when
     // the last sender goes (`watch`, at the result): what was written is still
@@ -1308,17 +1308,10 @@ fn brief(input: Option<&Value>) -> Value {
 /// Stops a run and everything it started (its shell commands too). The turn is
 /// left unfinished; the conversation itself is kept.
 pub fn stop(run: u64) {
-    let Some(pid) = RUNS.lock().unwrap().get(&run).copied() else { return };
+    let runs = RUNS.lock().unwrap();
+    let Some(tree) = runs.get(&run) else { return };
     log::line(format!("code run {run} stopped"));
-    kill_tree(pid);
-}
-
-/// Ends a process and everything it started.
-fn kill_tree(pid: u32) {
-    #[cfg(windows)]
-    let _ = platform::no_console(Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"])).status();
-    #[cfg(unix)]
-    let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
+    tree.end();
 }
 
 // ── The / menu ────────────────────────────────────────────────────────────────
@@ -1393,6 +1386,7 @@ pub fn commands(project: Option<&str>) -> Result<Vec<SlashCommand>, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
     let mut child = platform::no_console(&mut cmd).spawn().map_err(|e| format!("Could not start Claude Code: {e}"))?;
+    let tree = platform::Tree::hold(&child);
     let mut input = child.stdin.take();
     let request = json!({ "type": "control_request", "request_id": "buddybara-commands", "request": { "subtype": "initialize" } });
     if let Some(stdin) = input.as_mut() {
@@ -1420,7 +1414,7 @@ pub fn commands(project: Option<&str>) -> Result<Vec<SlashCommand>, String> {
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        kill_tree(child.id());
+        tree.end();
         let _ = child.wait();
     });
     let reply = reply.map_err(|_| "Claude Code didn't list its commands.".to_string())?;

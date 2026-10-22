@@ -532,8 +532,10 @@ fn log_line(message: String) {
 /// fixed by whichever webview is created first. Every window must therefore ask
 /// for the *same* arguments as the island (see `additionalBrowserArgs` in
 /// tauri.conf.json) — a mismatch makes the second window come up blank, with no
-/// error anywhere.
-pub(crate) const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
+/// error anywhere. SmartScreen stays on: switching a security feature off
+/// reads like tampering to antivirus scanners, for nothing (only Buddybara's
+/// own pages load here).
+pub(crate) const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI --autoplay-policy=no-user-gesture-required";
 
 /// In a dev build the pages are served by Vite, so the second window needs the
 /// absolute dev URL; a bundled build resolves it inside the app bundle.
@@ -617,8 +619,6 @@ fn open_settings_window(app: AppHandle, page: Option<String>) {
 
 pub fn run() {
     platform::prepare_environment();
-    #[cfg(windows)]
-    platform::adopt_legacy_config();
     let loaded = settings::load();
     // The chosen Projects folder, before the panel asks for its list.
     code::set_root(loaded.projects_root.clone().map(std::path::PathBuf::from));

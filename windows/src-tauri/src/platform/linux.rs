@@ -204,6 +204,22 @@ pub fn no_console(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
+/// A spawned process, for Stop: Windows holds its whole tree in a job; here
+/// `end` reaches the process itself, as it always has.
+pub struct Tree {
+    pid: u32,
+}
+
+impl Tree {
+    pub fn hold(child: &std::process::Child) -> Tree {
+        Tree { pid: child.id() }
+    }
+
+    pub fn end(&self) {
+        let _ = Command::new("kill").args(["-TERM", &self.pid.to_string()]).status();
+    }
+}
+
 /// To the desktop's trash (`gio trash`), whence it can be put back.
 pub fn move_to_trash(paths: &[PathBuf]) -> Result<(), String> {
     if paths.is_empty() {

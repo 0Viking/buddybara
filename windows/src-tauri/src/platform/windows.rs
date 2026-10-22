@@ -51,17 +51,6 @@ pub fn config_dir() -> PathBuf {
     base.join("Buddybara")
 }
 
-/// The preferences folder from before the rename (%APPDATA%\Coucou) becomes
-/// config_dir(). %LOCALAPPDATA%\Coucou stays: hooks installed before the rename
-/// still point at its relay until they are reinstalled.
-// ponytail: delete once both PCs have run it.
-pub fn adopt_legacy_config() {
-    let old = config_dir().with_file_name("Coucou");
-    if old.exists() && !config_dir().exists() {
-        let _ = std::fs::rename(old, config_dir());
-    }
-}
-
 /// %LOCALAPPDATA%\Buddybara — where buddybara-hook.exe, the inbox and the log live.
 pub fn local_dir() -> PathBuf {
     let base = std::env::var_os("LOCALAPPDATA")
@@ -95,6 +84,57 @@ pub fn local_time() -> LocalTime {
 /// Spawned helpers must never flash a console window.
 pub fn no_console(cmd: &mut Command) -> &mut Command {
     cmd.creation_flags(CREATE_NO_WINDOW)
+}
+
+/// A spawned process and everything it starts (shell commands, MCP servers),
+/// held in a job object: `end` ends them all at once with Windows' own calls,
+/// where a `taskkill /T` used to; letting go of it leaves whatever still runs
+/// alone. The job's handle is kept as a number: a raw handle isn't Send.
+pub struct Tree {
+    job: isize,
+    pid: u32,
+}
+
+impl Tree {
+    /// Taken right after the spawn, before the process has started anything.
+    /// When Windows refuses a job, `end` ends the process alone.
+    pub fn hold(child: &std::process::Child) -> Tree {
+        use std::os::windows::io::AsRawHandle;
+        use ::windows::core::PCWSTR;
+        use ::windows::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW};
+        let job = unsafe {
+            match CreateJobObjectW(None, PCWSTR::null()) {
+                Ok(job) if AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())).is_ok() => job.0 as isize,
+                Ok(job) => {
+                    let _ = CloseHandle(job);
+                    0
+                }
+                Err(_) => 0,
+            }
+        };
+        Tree { job, pid: child.id() }
+    }
+
+    pub fn end(&self) {
+        use ::windows::Win32::System::JobObjects::TerminateJobObject;
+        use ::windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+        unsafe {
+            if self.job != 0 {
+                let _ = TerminateJobObject(HANDLE(self.job as *mut _), 1);
+            } else if let Ok(process) = OpenProcess(PROCESS_TERMINATE, false, self.pid) {
+                let _ = TerminateProcess(process, 1);
+                let _ = CloseHandle(process);
+            }
+        }
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        if self.job != 0 {
+            let _ = unsafe { CloseHandle(HANDLE(self.job as *mut _)) };
+        }
+    }
 }
 
 /// To the Recycle Bin, whence it can be put back (a buddy session deleted).

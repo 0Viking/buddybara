@@ -23,5 +23,4 @@ Quit the app first: Windows locks the running exe.
 - Never overwrite `~/.claude/settings.json`: dated backup, merge, show the diff, write only after the user confirms.
 - Never approve a Claude Code permission without an explicit click.
 - Everything is named Buddybara: the identifier `com.buddybara.app` (Credential Manager keys, WebView data), `buddybara-hook` and its marker in `settings.json`, `%APPDATA%\Buddybara` and `%LOCALAPPDATA%\Buddybara`, `BUDDYBARA_*` variables. Renaming any of them orphans installed hooks or stored keys, so it needs a migration.
-- The code that moves an install from the old Coucou names is marked `ponytail:`: `LEGACY_SERVICE` (secrets.rs), `LEGACY_MARKER` and the status line copy (hooks.rs), and `adopt_legacy_config` (platform/windows.rs). Delete it once both PCs have run it and reinstalled their hooks.
 - Pill IDs are stable contract values (stored settings, hook routing): never rename one.
