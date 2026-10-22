@@ -863,6 +863,73 @@ static RUNS: LazyLock<Mutex<HashMap<u64, u32>>> = LazyLock::new(Default::default
 /// Runs still taking messages, until their turn's result: run → their input,
 /// and whether they may read the inbox (they started with files).
 static INPUTS: LazyLock<Mutex<HashMap<u64, (Sender<String>, bool)>>> = LazyLock::new(Default::default);
+/// Runs whose turn is over but that stay alive (background tasks, a plugin's
+/// pane open): their input ends once nothing keeps them any more.
+static BETWEEN_TURNS: LazyLock<Mutex<HashSet<u64>>> = LazyLock::new(Default::default);
+
+// ── Plugins' panes ───────────────────────────────────────────────────────────
+//
+// A plugin's mod can open a pane (a weather plugin's /forecast, say). Claude Code
+// draws panes for the surfaces attached to a session: Buddybara attaches to
+// each run as one (the Agent SDK's `ui_attach`), hears the open panes in the
+// stream (`system/ui_panes`), and asks for a pane's content, a tree of plain
+// elements, with `ui_render`; clicks, typing and picks go back as `ui_press`,
+// `ui_input`, `ui_select` (buddy.ts, buddy/pane.ts). The run stays alive while
+// a pane is open, the way it does for background tasks.
+
+/// The surface Buddybara draws as: of the three Claude Code knows, the one
+/// whose elements (boxes, text, buttons, fields, pickers) the panel draws.
+const SURFACE: &str = "desktop";
+const CLIENT: &str = "buddybara";
+/// What the page may ask a run about its panes, and nothing else.
+const UI_ASKS: &[&str] = &["ui_render", "ui_press", "ui_input", "ui_select", "ui_panes", "ui_pane_show", "ui_pane_focus", "ui_close"];
+/// How long a run gets to answer one of those.
+const UI_WAIT: Duration = Duration::from_secs(10);
+static NEXT_ASK: AtomicU64 = AtomicU64::new(1);
+/// Asks waiting for their answer: request id → where it goes.
+static ASKED: LazyLock<Mutex<HashMap<String, Sender<Value>>>> = LazyLock::new(Default::default);
+
+/// A control request on a run's input: the line, and its id.
+fn control_line(request: Value) -> (String, String) {
+    let id = format!("buddybara-{}", NEXT_ASK.fetch_add(1, Ordering::Relaxed));
+    (format!("{}\n", json!({ "type": "control_request", "request_id": id, "request": request })), id)
+}
+
+/// The page asks a run about its panes (one of UI_ASKS): Buddybara's surface
+/// and client are filled in, the answer comes back as Claude Code gave it.
+pub fn ui(run: u64, request: Value) -> Result<Value, String> {
+    let Value::Object(mut request) = request else { return Err("not a request".into()) };
+    let subtype = request.get("subtype").and_then(Value::as_str).unwrap_or("");
+    if !UI_ASKS.contains(&subtype) {
+        return Err(format!("{subtype} isn't asked from the page"));
+    }
+    if subtype != "ui_close" && subtype != "ui_panes" {
+        request.insert("surface".into(), json!(SURFACE));
+    }
+    request.insert("client_id".into(), json!(CLIENT));
+    let input = INPUTS.lock().unwrap().get(&run).map(|(input, _)| input.clone()).ok_or_else(|| crate::i18n::t("This pane's conversation has ended."))?;
+    let (line, id) = control_line(Value::Object(request));
+    let (found, answer) = channel::<Value>();
+    ASKED.lock().unwrap().insert(id.clone(), found);
+    if input.send(line).is_err() {
+        ASKED.lock().unwrap().remove(&id);
+        return Err(crate::i18n::t("This pane's conversation has ended."));
+    }
+    drop(input);
+    let reply = answer.recv_timeout(UI_WAIT);
+    ASKED.lock().unwrap().remove(&id);
+    let reply = reply.map_err(|_| crate::i18n::t("The plugin didn't answer."))?;
+    if reply.get("subtype").and_then(Value::as_str) == Some("error") {
+        return Err(reply.get("error").and_then(Value::as_str).map_or_else(|| crate::i18n::t("The plugin couldn't do it."), str::to_string));
+    }
+    Ok(reply.get("response").cloned().unwrap_or(Value::Null))
+}
+
+/// Buddybara is quitting: the runs it kept alive between turns end (their
+/// input closes, and Claude Code exits), so none is left behind.
+pub fn end_all() {
+    INPUTS.lock().unwrap().clear();
+}
 
 /// `claude`, from %PATH% or where its installer or winget puts it: installed
 /// while Buddybara runs, it is on a PATH this process started too early to see.
@@ -988,6 +1055,12 @@ pub fn send(
     // the last sender goes (`watch`, at the result): what was written is still
     // read, then Claude Code exits.
     let (input, lines) = channel::<String>();
+    // Attached as a surface first, so a plugin's pane opened in this run shows
+    // in the panel (not for a side question, never shown as a conversation).
+    if !options.btw {
+        let (attach, _) = control_line(json!({ "subtype": "ui_attach", "surface": SURFACE, "client_id": CLIENT }));
+        let _ = input.send(attach);
+    }
     let _ = input.send(line);
     if let Some(mut stdin) = child.stdin.take() {
         std::thread::spawn(move || {
@@ -1031,7 +1104,12 @@ pub fn say(run: u64, prompt: &str, attachments: &[String]) -> Result<bool, Strin
     if with_files && !reads_inbox {
         return Ok(false);
     }
-    Ok(input.send(line).is_ok())
+    let sent = input.send(line).is_ok();
+    // A turn starts: closing the pane now mustn't end the run under it.
+    if sent {
+        BETWEEN_TURNS.lock().unwrap().remove(&run);
+    }
+    Ok(sent)
 }
 
 /// Turns every line Claude Code prints into events until it exits. A run that
@@ -1052,24 +1130,55 @@ fn watch(app: &AppHandle, run: u64, mut child: Child) {
     let mut answered = false;
     // Background tasks still running (a dev server, a watcher): Claude Code
     // stays alive for them after its answer, and starts a turn by itself when
-    // one ends.
+    // one ends. A plugin's pane open keeps it alive too.
     let mut background = 0;
+    let mut panes = 0;
+    let end_if_free = |background: usize, panes: usize| {
+        if background == 0 && panes == 0 && BETWEEN_TURNS.lock().unwrap().contains(&run) {
+            INPUTS.lock().unwrap().remove(&run);
+        }
+    };
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
             let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
-            if v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed") {
-                background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+            // The answer to something the page asked (`ui`): back to it, not an event.
+            if v.get("type").and_then(Value::as_str) == Some("control_response") {
+                let id = v.pointer("/response/request_id").and_then(Value::as_str).unwrap_or("");
+                if let Some(asker) = ASKED.lock().unwrap().remove(id) {
+                    let _ = asker.send(v["response"].clone());
+                }
+                continue;
             }
-            // The turn is over. With nothing left in the background the input
-            // ends and Claude Code exits; otherwise it stays open, so the next
-            // message goes into this same process, as in VS Code.
-            if v.get("type").and_then(Value::as_str) == Some("result") && background == 0 {
-                INPUTS.lock().unwrap().remove(&run);
+            match v.get("subtype").and_then(Value::as_str) {
+                // (The last one ending starts a turn that says so: the input
+                // stays open for it, and ends at its result.)
+                Some("background_tasks_changed") => {
+                    background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+                }
+                // The last pane closed between turns: nothing keeps the run.
+                Some("ui_panes") => {
+                    panes = v.get("panes").and_then(Value::as_array).map_or(0, Vec::len);
+                    end_if_free(background, panes);
+                }
+                _ => {}
+            }
+            // Claude at work: a turn it started by itself is under way.
+            if v.get("type").and_then(Value::as_str) == Some("assistant") {
+                BETWEEN_TURNS.lock().unwrap().remove(&run);
+            }
+            // The turn is over. With nothing left in the background and no
+            // pane open the input ends and Claude Code exits; otherwise it
+            // stays open, so the next message goes into this same process, as
+            // in VS Code.
+            if v.get("type").and_then(Value::as_str) == Some("result") {
+                BETWEEN_TURNS.lock().unwrap().insert(run);
+                end_if_free(background, panes);
             }
             for mut event in events(&v) {
                 answered |= event["kind"] == "result";
                 if event["kind"] == "result" {
                     event["background"] = json!(background);
+                    event["panes"] = json!(panes);
                 }
                 event["run"] = json!(run);
                 emit(event);
@@ -1080,6 +1189,7 @@ fn watch(app: &AppHandle, run: u64, mut child: Child) {
     let errors = errors.join().unwrap_or_default();
     RUNS.lock().unwrap().remove(&run);
     INPUTS.lock().unwrap().remove(&run);
+    BETWEEN_TURNS.lock().unwrap().remove(&run);
     if !answered {
         let last = errors.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or("Claude Code stopped.");
         emit(json!({ "run": run, "kind": "result", "error": true, "text": last }));
@@ -1095,7 +1205,10 @@ pub fn events(v: &Value) -> Vec<Value> {
     let session = v.get("session_id").cloned().unwrap_or(Value::Null);
     match v.get("type").and_then(Value::as_str) {
         Some("system") => match v.get("subtype").and_then(Value::as_str) {
-            Some("init") => vec![json!({ "kind": "init", "session": session })],
+            // With the commands the session has: the panel's `/` menu asks again
+            // when one is new to it (a plugin's, registered as the session started).
+            Some("init") => vec![json!({ "kind": "init", "session": session, "commands": v.get("slash_commands").cloned().unwrap_or(json!([])) })],
+            Some("commands_changed") => vec![json!({ "kind": "commands_changed" })],
             // Compaction (asked for with /compact, or when the context is
             // full): a status when it starts, another with its result when it
             // ends, then, if it worked, the boundary with the sizes.
@@ -1118,6 +1231,29 @@ pub fn events(v: &Value) -> Vec<Value> {
                 "kind": "compacted",
                 "tokens": v.pointer("/compact_metadata/pre_tokens").and_then(Value::as_u64),
             })],
+            // A plugin's panes (buddy/pane.ts): which are open, which one asks
+            // to be shown, and when what they draw changed.
+            Some("ui_panes") => vec![json!({
+                "kind": "panes",
+                "panes": v.get("panes").and_then(Value::as_array).map(|list| list.iter().map(|p| json!({
+                    "id": p.get("id").and_then(Value::as_str).unwrap_or(""),
+                    "title": p.get("title").and_then(Value::as_str).unwrap_or(""),
+                    "plugin": p.get("plugin").and_then(Value::as_str).unwrap_or(""),
+                })).collect::<Vec<_>>()).unwrap_or_default(),
+                "focus": v.get("focus_requested_id").cloned().unwrap_or(Value::Null),
+            })],
+            Some("ui_invalidate") => vec![json!({
+                "kind": "ui_invalidate",
+                // Only these are stale; none named: every pane is.
+                "instances": v.get("instances").and_then(Value::as_array).map(|list| list.iter()
+                    .filter(|i| i.get("component").and_then(Value::as_str) == Some("Pane"))
+                    .filter_map(|i| i.get("instance_id").cloned())
+                    .collect::<Vec<_>>()),
+            })],
+            Some("ui_toast") => match v.get("text").and_then(Value::as_str).map(str::trim) {
+                Some(text) if !text.is_empty() => vec![json!({ "kind": "ui_toast", "text": one_line(text, 300) })],
+                _ => Vec::new(),
+            },
             // The name the user gave the session (/rename), said again when a run starts.
             Some("session_title_changed") => match v.get("title").and_then(Value::as_str).map(str::trim) {
                 Some(title) if !title.is_empty() => vec![json!({ "kind": "title", "text": title })],
@@ -1187,16 +1323,40 @@ fn kill_tree(pid: u32) {
 
 // ── The / menu ────────────────────────────────────────────────────────────────
 
-/// The `--settings` layer of the run that lists the commands: no hooks, so
-/// it starts no session anywhere (the island's, a gateway's).
-const NO_HOOKS: &str = r#"{"disableAllHooks":true}"#;
 /// How long Claude Code may take to answer (it loads its plugins first).
 const COMMANDS_WAIT: Duration = Duration::from_secs(30);
 /// How long it may take to end once its input is closed, before it is stopped.
 const COMMANDS_EXIT: Duration = Duration::from_secs(5);
+/// How long the session of a look at the commands stays quiet: its last hooks
+/// (SessionEnd) may come a little after it ended.
+const QUIET_FOR: Duration = Duration::from_secs(120);
+
+/// The sessions of Buddybara's looks at the commands, and since when: their
+/// hooks are no one's session (pipe.rs drops them).
+static QUIET: LazyLock<Mutex<HashMap<String, std::time::Instant>>> = LazyLock::new(Default::default);
+
+/// Whether hooks of `session` are Buddybara's own look at the commands.
+pub fn is_quiet(session: &str) -> bool {
+    let mut quiet = QUIET.lock().unwrap();
+    quiet.retain(|_, at| at.elapsed() < QUIET_FOR);
+    quiet.contains_key(session)
+}
+
+/// A new session id (a version 4 UUID), random from the hasher's per-process
+/// keys and the time: no crate needed for it.
+fn new_session_id() -> String {
+    use std::hash::BuildHasher;
+    let state = std::collections::hash_map::RandomState::new();
+    let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let a = state.hash_one((now, std::process::id(), NEXT_ASK.fetch_add(1, Ordering::Relaxed)));
+    let b = state.hash_one((a, now));
+    let hex = format!("{a:016x}{b:016x}");
+    format!("{}-{}-4{}-{:x}{}-{}", &hex[0..8], &hex[8..12], &hex[13..16], 8 | (u8::from_str_radix(&hex[16..17], 16).unwrap_or(0) & 3), &hex[17..20], &hex[20..32])
+}
 
 /// One entry of the `/` menu: a command built into Claude Code, a skill, a
-/// plugin's (`plugin:name`), or one of the user's or the project's own.
+/// plugin's (`plugin:name`, or a command a plugin's code registered, `plugin`
+/// naming it), or one of the user's or the project's own.
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SlashCommand {
@@ -1205,24 +1365,29 @@ pub struct SlashCommand {
     pub argument_hint: String,
     pub aliases: Vec<String>,
     pub builtin: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin: Option<String>,
 }
 
 /// The commands Claude Code has in `project`, asked as the Agent SDK asks for
 /// them: an `initialize` request, answered before any message, so no model is
-/// called. The run saves nothing and runs no hooks; once it has answered, its
-/// input is closed and it ends (or is stopped). Without a project (Settings →
-/// Skills), asked from the home folder: the user's own and plugins', no
-/// project's.
+/// called. Its hooks run, since plugins register their commands from theirs
+/// (`/forecast`), but its session id is chosen here and kept quiet, so nothing of it
+/// shows in Buddybara; it saves nothing, and once it has answered its input is
+/// closed and it ends (or is stopped). Without a project (Settings → Skills),
+/// asked from the home folder: the user's own and plugins', no project's.
 pub fn commands(project: Option<&str>) -> Result<Vec<SlashCommand>, String> {
     let cwd = match project {
         Some(project) => allowed(project)?,
         None => platform::home_dir(),
     };
     let exe = claude_exe().ok_or_else(|| "Claude Code isn't installed.".to_string())?;
+    let session = new_session_id();
+    QUIET.lock().unwrap().insert(session.clone(), std::time::Instant::now());
     let mut cmd = Command::new(exe);
     cmd.env("CLAUDE_CODE_ENTRYPOINT", ENTRYPOINT);
     cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
-        .args(["--no-session-persistence", "--settings", NO_HOOKS])
+        .args(["--no-session-persistence", "--session-id", &session])
         .current_dir(&cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1479,6 +1644,7 @@ fn parse_commands(reply: &Value) -> Result<Vec<SlashCommand>, String> {
                     .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
                     .unwrap_or_default(),
                 builtin: flag(c, "builtin"),
+                plugin: Some(text(c, "plugin")).filter(|p| !p.is_empty()),
                 name,
             })
         })
@@ -1798,8 +1964,17 @@ mod tests {
 
     #[test]
     fn the_stream_becomes_the_events_the_page_draws() {
-        let init = json!({ "type": "system", "subtype": "init", "session_id": "s1" });
-        assert_eq!(events(&init), vec![json!({ "kind": "init", "session": "s1" })]);
+        let init = json!({ "type": "system", "subtype": "init", "session_id": "s1", "slash_commands": ["compact", "forecast"] });
+        assert_eq!(events(&init), vec![json!({ "kind": "init", "session": "s1", "commands": ["compact", "forecast"] })]);
+        assert_eq!(events(&json!({ "type": "system", "subtype": "commands_changed", "commands": [] })), vec![json!({ "kind": "commands_changed" })]);
+        // The look at the commands has its own session id, and its hooks stay quiet.
+        let id = new_session_id();
+        let groups: Vec<&str> = id.split('-').collect();
+        assert_eq!(groups.iter().map(|g| g.len()).collect::<Vec<_>>(), vec![8, 4, 4, 4, 12], "{id}");
+        assert!(id.chars().all(|c| c == '-' || c.is_ascii_hexdigit()), "{id}");
+        assert!(groups[2].starts_with('4') && "89ab".contains(&groups[3][..1]), "{id}");
+        assert!(is_session_id(&id) && id != new_session_id());
+        assert!(!is_quiet(&id));
 
         let said = json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "content": [
             { "type": "text", "text": "Fixing it." },
@@ -1890,6 +2065,31 @@ mod tests {
     }
 
     #[test]
+    fn a_plugins_panes_reach_the_page_and_its_asks_are_control_requests() {
+        let roster = json!({ "type": "system", "subtype": "ui_panes", "panes": [{ "id": "weather", "title": "Weather", "plugin": "weather" }], "shown_id": "weather", "focus_requested_id": "weather" });
+        assert_eq!(
+            events(&roster),
+            vec![json!({ "kind": "panes", "panes": [{ "id": "weather", "title": "Weather", "plugin": "weather" }], "focus": "weather" })]
+        );
+        let closed = json!({ "type": "system", "subtype": "ui_panes", "panes": [], "focus_requested_id": null });
+        assert_eq!(events(&closed), vec![json!({ "kind": "panes", "panes": [], "focus": null })]);
+        // Stale: the panes named, or every one when none is.
+        let some = json!({ "type": "system", "subtype": "ui_invalidate", "event": "ui.render", "instances": [
+            { "surface": "desktop", "component": "Pane", "instance_id": "weather" },
+            { "surface": "desktop", "component": "AbovePrompt", "instance_id": "above-prompt" }] });
+        assert_eq!(events(&some), vec![json!({ "kind": "ui_invalidate", "instances": ["weather"] })]);
+        assert_eq!(events(&json!({ "type": "system", "subtype": "ui_invalidate", "event": "ui.render" })), vec![json!({ "kind": "ui_invalidate", "instances": null })]);
+        assert_eq!(events(&json!({ "type": "system", "subtype": "ui_toast", "plugin": "x", "text": " Done " })), vec![json!({ "kind": "ui_toast", "text": "Done" })]);
+        let (line, id) = control_line(json!({ "subtype": "ui_attach", "surface": SURFACE, "client_id": CLIENT }));
+        let sent: Value = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(sent, json!({ "type": "control_request", "request_id": id, "request": { "subtype": "ui_attach", "surface": "desktop", "client_id": "buddybara" } }));
+        // The page asks nothing but its panes, and only of a run that is there.
+        assert!(ui(1, json!({ "subtype": "initialize" })).is_err());
+        assert!(ui(1, json!({ "subtype": "interrupt" })).is_err());
+        assert_eq!(ui(987_654, json!({ "subtype": "ui_panes" })), Err("This pane's conversation has ended.".into()));
+    }
+
+    #[test]
     fn claude_is_mid_turn_until_an_answer_ends_it() {
         let line = |s: &str| serde_json::from_str::<Value>(s).unwrap();
         // At work, or waiting on a permission or a question.
@@ -1949,12 +2149,15 @@ mod tests {
             { "name": "compact", "description": "Free up context", "argumentHint": "<instructions>", "builtin": true },
             { "name": "notes:daily", "description": "(notes) Write the daily note", "argumentHint": "", "aliases": ["today"] },
             { "name": "", "description": "nameless" },
+            { "name": "forecast", "description": "Opens the panel", "argumentHint": "", "plugin": "weather" },
         ] } } });
         let list = parse_commands(&reply).unwrap();
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
+        // A command a plugin's code registered says whose it is.
+        assert_eq!((list[2].name.as_str(), list[2].plugin.as_deref()), ("forecast", Some("weather")));
         assert_eq!(
             list[0],
-            SlashCommand { name: "compact".into(), description: "Free up context".into(), argument_hint: "<instructions>".into(), aliases: vec![], builtin: true }
+            SlashCommand { name: "compact".into(), description: "Free up context".into(), argument_hint: "<instructions>".into(), aliases: vec![], builtin: true, plugin: None }
         );
         assert_eq!((list[1].name.as_str(), list[1].aliases.clone(), list[1].builtin), ("notes:daily", vec!["today".to_string()], false));
         let refused = json!({ "type": "control_response", "response": { "subtype": "error", "error": "not now" } });

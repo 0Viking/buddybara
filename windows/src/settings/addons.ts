@@ -12,7 +12,7 @@ import {
   type AddonPreview, type AddonRun, type InstalledPlugin, type MarketPlugin, type MySkill, type NewSkill, type SlashCommand,
 } from "../core/bridge";
 import { skillName } from "../core/skills";
-import { describe, pluginName } from "../buddy/commands";
+import { describe, fromPlugin, pluginName } from "../buddy/commands";
 import { clear, h } from "../views/dom";
 import { N_, t } from "../i18n/i18n";
 import { markTile, toggle } from "./parts";
@@ -104,7 +104,7 @@ function askPlugins(): Promise<void> {
 
 /** One installed command: what it does, Use, and for the user's own Edit and Remove. */
 function skillCard(c: SlashCommand, own: MySkill | undefined): HTMLElement {
-  const plugin = c.name.includes(":");
+  const plugin = fromPlugin(c);
   const command = `/${c.name}`;
   const summary = describe(c);
   const actions: HTMLElement[] = [];
@@ -126,7 +126,7 @@ function skillCard(c: SlashCommand, own: MySkill | undefined): HTMLElement {
   }
   return h("div", { class: "dir-card" },
     h("div", { class: "dir-top" },
-      markTile(plugin ? c.name.split(":")[0] : c.name, plugin ? pluginName(c) : c.name),
+      markTile(plugin ? c.plugin ?? c.name.split(":")[0] : c.name, plugin ? pluginName(c) : c.name),
       h("div", { class: "dir-title" },
         h("div", { class: "conn-name", text: command, title: command }),
         plugin || own ? h("div", { class: "conn-sub" }, h("span", { text: plugin ? pluginName(c) : own?.kind === "command" ? t("Your command") : t("Yours") })) : null,
@@ -172,7 +172,7 @@ export function installedSkills(query: string): HTMLElement {
     const own = (c: SlashCommand) => mine.find((m) => m.name === c.name);
     const list = skills
       .filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
-      .sort((a, b) => Number(a.name.includes(":")) - Number(b.name.includes(":")) || a.name.localeCompare(b.name));
+      .sort((a, b) => Number(fromPlugin(a)) - Number(fromPlugin(b)) || a.name.localeCompare(b.name));
     head.textContent = `${t("Installed")} · ${list.length}`;
     if (!list.length) grid.append(h("div", { class: "hint", text: q ? t("No results") : t("Nothing here") }));
     for (const c of list) grid.append(skillCard(c, own(c)));
@@ -497,10 +497,12 @@ function previewView(body: HTMLElement, p: AddonPreview) {
   const install = h("button", { class: "primary", text: p.replaces ? t("Replace") : t("Install") });
   install.disabled = p.problem != null || (p.runs.length > 0 && !trust);
   install.addEventListener("click", async () => {
+    // Read before the next step clears it.
+    const trusted = trust;
     setStep({ at: "busy", text: t("Installing…") });
     redrawTool();
     try {
-      const commands = await Bridge.addonInstall(p.id, trust);
+      const commands = await Bridge.addonInstall(p.id, trusted);
       setStep({ at: "done", commands });
       installedChanged();
     } catch (err) {

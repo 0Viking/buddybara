@@ -459,6 +459,13 @@ fn code_stop(run: u64) {
     code::stop(run);
 }
 
+/// A plugin's pane in the panel asks its run (code::ui): what it draws, a
+/// click, typing, a pick, a close. A second or less, off the async threads.
+#[tauri::command]
+async fn code_ui(run: u64, request: serde_json::Value) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || code::ui(run, request)).await.map_err(|e| e.to_string())?
+}
+
 // ── Chat, files and secrets ───────────────────────────────────────────────────
 
 /// Copies a dropped file into the inbox and reports its name back. Off the
@@ -685,6 +692,7 @@ pub fn run() {
             code_send,
             code_say,
             code_stop,
+            code_ui,
             paste_file,
             skin::skin_save,
             skin::skin_remove,
@@ -772,8 +780,10 @@ pub fn run() {
         .expect("error while building Buddybara")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
-                // A buddy's terminal goes with it, as with a terminal window.
+                // A buddy's terminal goes with it, as with a terminal window;
+                // runs kept alive between turns (a pane, background tasks) end.
                 terminal::kill_all();
+                code::end_all();
             }
         });
 }

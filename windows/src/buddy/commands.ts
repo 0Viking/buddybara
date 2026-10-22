@@ -95,9 +95,14 @@ export function describe(c: SlashCommand): string {
   return text.replace(/\s*\((user|project)\)$/, "");
 }
 
-/** A plugin's name as its own commands give it (`(Atlassian MCP) …`), else its part of the name. */
+/** A plugin's name as its own commands give it (`(Atlassian MCP) …`), else the plugin Claude Code names, else its part of the name. */
 export function pluginName(c: SlashCommand): string {
-  return /^\(([^)]+)\)/.exec(c.description.trim())?.[1] ?? c.name.split(":")[0];
+  return /^\(([^)]+)\)/.exec(c.description.trim())?.[1] ?? c.plugin ?? c.name.split(":")[0];
+}
+
+/** A plugin's: `plugin:name`, or a command its code registered (`/forecast`). */
+export function fromPlugin(c: SlashCommand): boolean {
+  return c.name.includes(":") || !!c.plugin;
 }
 
 /**
@@ -121,7 +126,7 @@ export function menuCommands(list: SlashCommand[]): MenuCommand[] {
       description: describe(c),
       hint: c.argumentHint,
       aliases: c.aliases,
-      group: c.builtin ? "builtin" : c.name.includes(":") ? "plugin" : "skill",
+      group: c.builtin ? "builtin" : fromPlugin(c) ? "plugin" : "skill",
     });
   }
   return out;

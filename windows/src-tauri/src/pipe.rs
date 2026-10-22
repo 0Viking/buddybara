@@ -205,6 +205,12 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
     if !payload.is_object() {
         return;
     }
+    // Buddybara's own look at a project's commands (code.rs commands): its
+    // hooks are no one's session, so nothing of them shows.
+    if payload.get("session_id").and_then(Value::as_str).is_some_and(crate::code::is_quiet) {
+        pipe.finish();
+        return;
+    }
     // The session's project, not the folder it last cd'd into (code.rs).
     crate::code::anchor_cwd(&mut payload);
 

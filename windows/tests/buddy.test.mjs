@@ -110,6 +110,24 @@ test("compacting shows while it runs, then how big the conversation was", () => 
   assert.deepEqual([850, 73870, 999_400, 964_057, 1_234_567].map(tokensShort), ["850", "74k", "999k", "964k", "1.2M"]);
 });
 
+test("a conversation keeps the plugins' panes its run holds, and loses them with it", () => {
+  const c = chat();
+  const pane = { id: "weather", title: "Weather", plugin: "weather" };
+  applyRunEvent(c, { run: 7, kind: "panes", panes: [pane], focus: "weather" });
+  assert.deepEqual([c.panes, c.paneRun], [[pane], 7]);
+  // Another run's end changes nothing; its own takes them away.
+  applyRunEvent(c, { run: 6, kind: "exit" });
+  assert.equal(c.paneRun, 7);
+  applyRunEvent(c, { run: 7, kind: "exit" });
+  assert.deepEqual([c.panes, c.paneRun], [[], null]);
+  // The last one closed: no run holds any.
+  applyRunEvent(c, { run: 8, kind: "panes", panes: [pane] });
+  applyRunEvent(c, { run: 8, kind: "panes", panes: [] });
+  assert.deepEqual([c.panes, c.paneRun], [[], null]);
+  // None of it is a line of the conversation.
+  assert.deepEqual(c.lines, []);
+});
+
 test("a session renamed with /rename takes its new name; a side question keeps its own", () => {
   const c = chat();
   applyRunEvent(c, { run: 1, kind: "title", text: "Mic fixes" });

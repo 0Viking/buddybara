@@ -1,7 +1,7 @@
 // The buddy panel's conversations (buddy.ts), kept free of the DOM: what a run
 // says turns into lines, and times into "3 min ago". Tested on their own.
 
-import type { CodeMessage, CodeProject, CodeRunEvent } from "../core/bridge";
+import type { CodeMessage, CodeProject, CodeRunEvent, PaneInfo } from "../core/bridge";
 import { stepLabel } from "../island/hooks";
 import { language, t } from "../i18n/i18n";
 
@@ -43,6 +43,9 @@ export interface Chat {
   stopped: boolean;
   /** A conversation with another model than Claude Code (chat.rs): no session, not saved. */
   other?: OtherModel;
+  /** Plugins' panes open in it (buddy/pane.ts), and the run that holds them: they go with it. */
+  panes?: PaneInfo[];
+  paneRun?: number | null;
 }
 
 /** Another model a conversation goes to: a provider of Settings → AI models and its model. */
@@ -116,6 +119,18 @@ export function applyRunEvent(chat: Chat, e: CodeRunEvent) {
     }
     case "init":
       if (e.session) chat.id = e.session;
+      break;
+    case "panes":
+      // The run holding them answers for them.
+      chat.panes = Array.isArray(e.panes) ? e.panes : [];
+      chat.paneRun = chat.panes.length ? e.run : null;
+      break;
+    case "exit":
+      // Its run gone, its panes are too.
+      if (chat.paneRun === e.run) {
+        chat.panes = [];
+        chat.paneRun = null;
+      }
       break;
     case "title":
       // Renamed (/rename). A side question's title says which conversation it is about: kept.

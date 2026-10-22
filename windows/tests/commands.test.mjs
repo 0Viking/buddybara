@@ -18,6 +18,8 @@ const listed = [
   { name: "usage", description: "Show the total cost", argumentHint: "", aliases: ["cost", "stats"], builtin: true },
   { name: "color", description: "Set the prompt bar color", argumentHint: "", aliases: [], builtin: true },
   { name: "__remote-workflow", description: "internal", argumentHint: "", aliases: [], builtin: true },
+  // Registered by a plugin's code: no `plugin:` in its name, Claude Code names the plugin.
+  { name: "forecast", description: "Opens the Weather panel", argumentHint: "", aliases: [], builtin: false, plugin: "weather" },
 ];
 
 test("the menu offers the panel's own commands and Claude Code's, less those of no use in the panel", () => {
@@ -29,7 +31,7 @@ test("the menu offers the panel's own commands and Claude Code's, less those of 
   // Claude Code's, less its terminal's and its internal ones; its /usage is the panel's.
   assert.deepEqual(
     menu.filter((c) => listed.some((l) => l.name === c.name) && c.name !== "usage").map((c) => [c.name, c.group]),
-    [["notes", "skill"], ["journal:standup", "plugin"], ["compact", "builtin"], ["clear", "builtin"], ["context", "builtin"]],
+    [["notes", "skill"], ["journal:standup", "plugin"], ["compact", "builtin"], ["clear", "builtin"], ["context", "builtin"], ["forecast", "plugin"]],
   );
   const about = (name) => menu.find((c) => c.name === name).description;
   assert.equal(about("btw"), "Ask a side question; the conversation itself stays as it is.");
@@ -46,6 +48,7 @@ test("descriptions lose what the name already says", () => {
   assert.equal(describe({ ...listed[2], description: "Free up\n  context" }), "Free up context");
   assert.equal(pluginName(listed[1]), "Journal");
   assert.equal(pluginName({ ...listed[1], description: "Draft a standup" }), "journal");
+  assert.equal(pluginName(listed.find((c) => c.name === "forecast")), "weather");
 });
 
 test("the menu opens on the first word only, while it is being typed", () => {

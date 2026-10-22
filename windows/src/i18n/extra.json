@@ -5562,6 +5562,50 @@
    "pt-BR": "“{name}” não é um nome que o Claude Code aceite para um plugin.",
    "ru": "«{name}» — не то имя, которое Claude Code примет для плагина.",
    "id": "“{name}” bukan nama yang diterima Claude Code untuk plugin."
+  },
+  "This part of the plugin only shows in Claude Code Desktop.": {
+   "zh-Hans": "插件的这一部分只在 Claude Code Desktop 中显示。",
+   "hi": "प्लगइन का यह हिस्सा सिर्फ़ Claude Code Desktop में दिखता है।",
+   "es": "Esta parte del plugin solo se muestra en Claude Code Desktop.",
+   "ar": "لا يظهر هذا الجزء من الإضافة إلا في Claude Code Desktop.",
+   "fr": "Cette partie du plugin ne s’affiche que dans Claude Code Desktop.",
+   "bn": "প্লাগইনের এই অংশটি শুধু Claude Code Desktop-এ দেখা যায়।",
+   "pt-BR": "Esta parte do plugin só aparece no Claude Code Desktop.",
+   "ru": "Эта часть плагина отображается только в Claude Code Desktop.",
+   "id": "Bagian plugin ini hanya tampil di Claude Code Desktop."
+  },
+  "This pane's conversation has ended.": {
+   "zh-Hans": "这个面板所属的对话已经结束。",
+   "hi": "इस पेन की बातचीत ख़त्म हो चुकी है।",
+   "es": "La conversación de este panel ha terminado.",
+   "ar": "انتهت المحادثة التي تتبعها هذه اللوحة.",
+   "fr": "La conversation de ce panneau est terminée.",
+   "bn": "এই প্যানের কথোপকথন শেষ হয়ে গেছে।",
+   "pt-BR": "A conversa deste painel terminou.",
+   "ru": "Разговор этой панели завершён.",
+   "id": "Percakapan panel ini sudah berakhir."
+  },
+  "The plugin didn't answer.": {
+   "zh-Hans": "插件没有响应。",
+   "hi": "प्लगइन ने जवाब नहीं दिया।",
+   "es": "El plugin no respondió.",
+   "ar": "لم تستجب الإضافة.",
+   "fr": "Le plugin n’a pas répondu.",
+   "bn": "প্লাগইন সাড়া দেয়নি।",
+   "pt-BR": "O plugin não respondeu.",
+   "ru": "Плагин не ответил.",
+   "id": "Plugin tidak menjawab."
+  },
+  "The plugin couldn't do it.": {
+   "zh-Hans": "插件无法完成这个操作。",
+   "hi": "प्लगइन यह नहीं कर सका।",
+   "es": "El plugin no pudo hacerlo.",
+   "ar": "لم تتمكن الإضافة من فعل ذلك.",
+   "fr": "Le plugin n’a pas pu le faire.",
+   "bn": "প্লাগইন এটি করতে পারেনি।",
+   "pt-BR": "O plugin não conseguiu fazer isso.",
+   "ru": "Плагин не смог это сделать.",
+   "id": "Plugin tidak bisa melakukannya."
   }
  }
 }

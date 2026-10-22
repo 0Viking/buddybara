@@ -39,7 +39,8 @@ import { THEME_EVENT } from "../core/theme";
 import { BuddyTerminal, type TermTarget } from "./terminal";
 import { Setup } from "./setup";
 import { renderUsage } from "./usage";
-import { Drawer, aiProvider } from "./drawer";
+import { Drawer, aiProvider, paneId } from "./drawer";
+import { drawPane, type PaneActions, type PaneChild, type PaneNode } from "./pane";
 import { refreshClaudePlan } from "../island/hooks";
 import { PROVIDERS, providerDef, readyProviders } from "../core/providers";
 import {
@@ -341,6 +342,8 @@ export class Buddy {
   private partial = new WeakMap<Chat, Line>();
   /** Each project's conversations with other models, kept while Buddybara runs (they aren't saved). */
   private others = new Map<string, Chat[]>();
+  /** Plugins' panes drawn in the drawer, by `run:pane` (paneView): their element, and whether they need drawing. */
+  private paneViews = new Map<string, { pane: HTMLElement; body: HTMLElement; stale: boolean; drawing: boolean; again: boolean }>();
   /** The drawer's chats with other models, one per provider, kept while Buddybara runs (aiView). */
   private aiChats = new Map<string, Chat>();
   /** Their tabs, built once each: put back, a text box would lose the keyboard. */
@@ -398,7 +401,9 @@ export class Buddy {
     this.drawer = new Drawer(main, {
       terminal: this.terminal.el,
       picked: (tab) => {
+        const pane = paneId(tab);
         if (tab === "terminal") void this.showTerminal();
+        else if (pane != null) this.panePicked(pane);
         else {
           this.refreshFromTerminal();
           this.render();
@@ -415,6 +420,9 @@ export class Buddy {
       btwView: () => this.btwView(),
       aiReady: () => readyProviders(State.settings, this.otherKeys).map((r) => r.def.id),
       aiView: (provider) => this.aiView(provider),
+      panes: () => (this.chat?.paneRun != null ? this.chat.panes ?? [] : []),
+      paneView: (id) => this.paneView(id),
+      closePane: (id) => this.closePane(id),
     });
     this.composer.after(this.drawer.bar, this.drawer.space);
     main.append(this.drawer.el);
@@ -1182,27 +1190,48 @@ export class Buddy {
       return;
     }
     if (chat.side) return this.onBtw(chat, e);
+    // A plugin's pane changed what it draws, or says something: only that.
+    if (e.kind === "ui_invalidate") return this.panesStale(chat, e.instances ?? null);
+    if (e.kind === "ui_toast") {
+      if (this.chat === chat && e.text) this.flashNote(e.text);
+      return;
+    }
+    // Claude Code's commands changed mid-session: the `/` menu asks again.
+    if (e.kind === "commands_changed") {
+      this.commands.delete(chat.project.path);
+      return;
+    }
     if (e.kind === "exit") {
       this.runs.delete(e.run);
+      // Its panes go with it.
+      applyRunEvent(chat, e);
+      this.forgetPanes(e.run);
       if (chat.alive === e.run) chat.alive = null;
       if (chat.run === e.run) {
         chat.run = null;
         this.ended(chat);
       } else this.track(chat);
     } else {
-      // Alive between turns, it starts one by itself (a background task ended).
-      if (chat.run == null && chat.alive === e.run && e.kind !== "result") {
+      // Alive between turns, it starts one by itself (a background task
+      // ended). Panes opening or closing aren't a turn.
+      if (chat.run == null && chat.alive === e.run && e.kind !== "result" && e.kind !== "panes") {
         chat.run = e.run;
         chat.alive = null;
       }
       const title = chat.title;
       applyRunEvent(chat, e);
       if (chat.title !== title) this.titled(chat);
-      if (e.kind === "init") this.named(chat);
+      if (e.kind === "init") {
+        this.named(chat);
+        this.commandsSeen(chat.project.path, e.commands ?? []);
+      }
+      if (e.kind === "panes") this.panesChanged(chat, e.run, e.focus ?? null);
       if (e.kind === "result") Sound.play(e.error ? "error" : "finish");
-      // The turn is over, but background tasks keep the run alive: the
-      // conversation is free again, and its next message goes into this run.
-      if (e.kind === "result" && e.background && chat.run === e.run) {
+      // The turn is over, but background tasks or a plugin's pane keep the run
+      // alive: the conversation is free again, and its next message goes into
+      // this run.
+      const keeps = (e.background ?? 0) > 0 || (typeof e.panes === "number" && e.panes > 0);
+      if (e.kind === "result" && keeps && chat.run === e.run) {
         chat.run = null;
         chat.alive = e.run;
         const queued = dropQueue(chat);
@@ -1932,6 +1961,136 @@ export class Buddy {
     else if (chat.side) this.drawer.render();
   }
 
+  // ── Plugins' panes in the drawer ────────────────────────────────────────────
+
+  /** A pane's view: built once per run and pane, drawn again when the plugin says it changed. */
+  private paneView(id: string): HTMLElement {
+    const chat = this.chat;
+    const run = chat?.paneRun;
+    if (!chat || run == null) return h("div", { class: "b-drawer-pane" });
+    const v = this.paneParts(run, id);
+    if (v.stale) void this.drawPaneOf(chat, id);
+    return v.pane;
+  }
+
+  private paneParts(run: number, id: string) {
+    const key = `${run}:${id}`;
+    let v = this.paneViews.get(key);
+    if (!v) {
+      const body = h("div", { class: "b-pane-body" });
+      const pane = h("div", { class: "b-drawer-pane b-pane" }, body);
+      // A press in it gives the pane the keyboard (its Pane site then holds it).
+      pane.addEventListener("focusin", () => void Bridge.codeUi(run, { subtype: "ui_pane_focus", id }).catch(() => {}));
+      v = { pane, body, stale: true, drawing: false, again: false };
+      this.paneViews.set(key, v);
+    }
+    return v;
+  }
+
+  /** What the person does in a pane, sent to the run that holds it; the pane is drawn again after. */
+  private paneActions(chat: Chat, run: number, id: string): PaneActions {
+    const site = { component: "Pane", instance_id: id };
+    const key = (n: PaneNode) => (typeof n.props?.key === "string" ? { key: n.props.key } : {});
+    const send = (request: Record<string, unknown>) => {
+      Bridge.codeUi(run, request)
+        .catch((err) => void Bridge.log(`buddy: pane ${id}: ${errorText(err)}`))
+        .finally(() => void this.drawPaneOf(chat, id));
+    };
+    return {
+      press: (n, href) => {
+        if (n.press) send({ subtype: "ui_press", plugin: n.press.plugin, handle: n.press.handle, ...key(n), ...(href ? { href } : {}) });
+      },
+      input: (n, kind, value) => {
+        if (n.press) send({ subtype: "ui_input", plugin: n.press.plugin, handle: n.press.handle, kind, value, ...key(n), ...site });
+      },
+      select: (n, value) => {
+        if (n.press) send({ subtype: "ui_select", plugin: n.press.plugin, handle: n.press.handle, value, ...key(n), ...site });
+      },
+      openUrl: (url) => void Bridge.openUrl(url),
+    };
+  }
+
+  /** Asks the pane's run for what it draws now, and draws it (one at a time; asked again meanwhile, once more after). */
+  private async drawPaneOf(chat: Chat, id: string) {
+    const run = chat.paneRun;
+    if (run == null || !chat.panes?.some((p) => p.id === id)) return;
+    const v = this.paneParts(run, id);
+    v.stale = false;
+    if (v.drawing) {
+      v.again = true;
+      return;
+    }
+    v.drawing = true;
+    try {
+      const size = v.body.getBoundingClientRect();
+      const answer = await Bridge.codeUi<{ tree?: PaneChild }>(run, {
+        subtype: "ui_render", component: "Pane", instance_id: id,
+        props: {
+          title: chat.panes.find((p) => p.id === id)?.title ?? id,
+          isFocused: this.drawer.open && this.drawer.active === `pane:${id}`,
+          // In the terminal's cells: what the plugin lays its text out for.
+          bodyColumns: Math.max(24, Math.floor((size.width || 380) / 7.5)),
+          placement: "dock",
+          scroll: { offset: 0, bodyRows: Math.max(8, Math.floor((size.height || 320) / 18)) },
+        },
+      });
+      drawPane(v.body, answer.tree ?? null, this.paneActions(chat, run, id), chat.project.path);
+    } catch (err) {
+      if (!v.body.firstChild) v.body.append(h("div", { class: "b-hint", text: errorText(err) }));
+    } finally {
+      v.drawing = false;
+      if (v.again) {
+        v.again = false;
+        void this.drawPaneOf(chat, id);
+      }
+    }
+  }
+
+  /** The panes open in `run` changed: closed ones' views go, tabs follow, one a plugin asks to show comes up. */
+  private panesChanged(chat: Chat, run: number, focus: string | null) {
+    const open = new Set((chat.panes ?? []).map((p) => `${run}:${p.id}`));
+    for (const key of [...this.paneViews.keys()]) {
+      if (key.startsWith(`${run}:`) && !open.has(key)) this.paneViews.delete(key);
+    }
+    if (focus && this.chat === chat && open.has(`${run}:${focus}`)) this.drawer.show(`pane:${focus}`);
+    else this.drawer.render();
+  }
+
+  /** What these panes draw changed (null: every pane's): the one on screen is drawn now, the others when shown. */
+  private panesStale(chat: Chat, ids: string[] | null) {
+    const run = chat.paneRun;
+    if (run == null) return;
+    for (const p of chat.panes ?? []) {
+      if (ids && !ids.includes(p.id)) continue;
+      const v = this.paneViews.get(`${run}:${p.id}`);
+      if (!v) continue;
+      v.stale = true;
+      if (this.chat === chat && this.drawer.open && this.drawer.active === `pane:${p.id}`) void this.drawPaneOf(chat, p.id);
+    }
+  }
+
+  /** A pane's tab picked: Claude Code hears it is shown, and it is drawn. */
+  private panePicked(id: string) {
+    const chat = this.chat;
+    const run = chat?.paneRun;
+    if (!chat || run == null) return;
+    void Bridge.codeUi(run, { subtype: "ui_pane_show", id }).catch(() => {});
+    this.render();
+    void this.drawPaneOf(chat, id);
+  }
+
+  /** A pane tab's ×: the plugin is asked to close it; the roster that follows takes its tab away. */
+  private closePane(id: string) {
+    const run = this.chat?.paneRun;
+    if (run == null) return;
+    void Bridge.codeUi(run, { subtype: "ui_close", id }).catch((err) => void Bridge.log(`buddy: pane ${id}: ${errorText(err)}`));
+  }
+
+  /** A run ended: its panes' views go. */
+  private forgetPanes(run: number) {
+    for (const key of [...this.paneViews.keys()]) if (key.startsWith(`${run}:`)) this.paneViews.delete(key);
+  }
+
   // ── Other models in the drawer ──────────────────────────────────────────────
 
   /** An other model's tab: which model, a new conversation, the chat, its text box. */
@@ -2585,6 +2744,17 @@ export class Buddy {
     this.input.setSelectionRange(this.input.value.length, this.input.value.length);
     this.fitInput();
     this.renderComposer();
+  }
+
+  /**
+   * A run started with these commands: one the menu doesn't know (a plugin
+   * installed since, registered as the session started) makes it ask again.
+   */
+  private commandsSeen(project: string, names: string[]) {
+    const known = this.commands.get(project);
+    if (!known?.list || known.asking) return;
+    const have = new Set(known.list.map((c) => c.name));
+    if (names.some((n) => !n.startsWith("_") && !have.has(n))) this.commands.delete(project);
   }
 
   /** A project's commands, asked of Claude Code when the menu first opens there, and again once stale. */

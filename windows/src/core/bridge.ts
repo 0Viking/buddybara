@@ -66,6 +66,8 @@ export interface SlashCommand {
   argumentHint: string;
   aliases: string[];
   builtin: boolean;
+  /** A command a plugin's code registered (`/forecast`): which plugin. */
+  plugin?: string;
 }
 
 /** How a run works: a permission mode of the picker, an effort and a model (null = Claude Code's). */
@@ -168,7 +170,9 @@ export interface SessionUsage {
 /** One `code-run` event: what code.rs `events` makes of Claude Code's stream. */
 export interface CodeRunEvent {
   run: number;
-  kind: "init" | "text" | "tool" | "result" | "exit" | "compacting" | "compacted" | "compact_failed" | "compact_skipped" | "title";
+  kind:
+    | "init" | "text" | "tool" | "result" | "exit" | "compacting" | "compacted" | "compact_failed" | "compact_skipped" | "title"
+    | "panes" | "ui_invalidate" | "ui_toast" | "commands_changed";
   session?: string | null;
   text?: string;
   tool?: string;
@@ -176,8 +180,23 @@ export interface CodeRunEvent {
   error?: boolean;
   /** On a result: background tasks still running, which keep the run alive between turns. */
   background?: number;
+  /** On a result: plugins' panes open, which keep it alive too. */
+  panes?: number | PaneInfo[];
+  /** On "panes": the pane a plugin asks to be shown. */
+  focus?: string | null;
+  /** On "init": the session's commands, by name. */
+  commands?: string[];
+  /** On "ui_invalidate": the panes whose content changed; null: all of them. */
+  instances?: string[] | null;
   /** On "compacted": how big the conversation was, in tokens. ("title": `text` is the session's new name.) */
   tokens?: number | null;
+}
+
+/** A plugin's pane open in a run (code.rs `ui_panes`). */
+export interface PaneInfo {
+  id: string;
+  title: string;
+  plugin: string;
 }
 
 export const Bridge = {
@@ -367,6 +386,8 @@ export const Bridge = {
   codeSay: (run: number, prompt: string, attachments: string[] = []) =>
     callOrThrow<boolean>("code_say", { run, prompt, attachments }),
   codeStop: (run: number) => call<void>("code_stop", { run }),
+  /** A plugin's pane asks its run (code.rs `ui`): `ui_render`, `ui_press`, `ui_input`, `ui_select`, `ui_close`… */
+  codeUi: <T = unknown>(run: number, request: Record<string, unknown>) => callOrThrow<T>("code_ui", { run, request }),
   /** Writes a pasted file into the inbox. The bytes go as they are; `name` must be plain ASCII. */
   pasteFile: (name: string, bytes: Uint8Array) => {
     if (!IS_TAURI) return Promise.reject(new Error("not running inside Buddybara"));

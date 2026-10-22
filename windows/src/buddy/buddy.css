@@ -1838,6 +1838,134 @@
   flex-direction: column;
 }
 
+/* A plugin's pane (buddy.ts paneView, pane.ts): what its mod draws, in the panel's look. */
+.b-pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px 14px;
+  font: 400 calc(12.5px * var(--text, 1))/1.45 var(--font);
+  color: var(--ink);
+  scrollbar-width: thin;
+}
+
+.pn-box {
+  display: flex;
+  min-width: 0;
+}
+
+.pn-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Text inside text runs on the same line. */
+.pn-text .pn-text {
+  display: inline;
+}
+
+.pn-text.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-pane .dim {
+  color: var(--dim);
+}
+
+.pn-button {
+  flex: none;
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: calc(8px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(8% * var(--lines)), transparent);
+  color: var(--ink-2);
+  font: 500 calc(12px * var(--text, 1)) var(--font);
+  text-align: start;
+  cursor: pointer;
+}
+
+.pn-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tint) calc(13% * var(--lines)), transparent);
+}
+
+.pn-button.dim {
+  background: transparent;
+  padding-inline: 2px;
+}
+
+.pn-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pn-input,
+.pn-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--tint) calc(12% * var(--lines)), transparent);
+  border-radius: calc(7px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(4% * var(--lines)), transparent);
+  color: var(--ink);
+  font: 400 calc(12.5px * var(--text, 1)) var(--font);
+  outline: none;
+}
+
+.pn-input:focus,
+.pn-select:focus {
+  border-color: color-mix(in srgb, var(--mikan) 55%, transparent);
+}
+
+.pn-input::placeholder {
+  color: var(--dim-3);
+}
+
+/* The picker's list is drawn by Windows: a pair of colours it can't lose. */
+.pn-select option {
+  background: var(--card);
+  color: var(--ink);
+}
+
+.pn-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mikan);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.pn-code {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: calc(8px * var(--round));
+  background: color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
+  color: var(--code, var(--ink));
+  font: 400 calc(11.5px * var(--text, 1))/1.45 var(--mono, ui-monospace, monospace);
+}
+
+.pn-image {
+  max-width: 100%;
+  border-radius: calc(8px * var(--round));
+}
+
+.pn-unsupported {
+  padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--tint) calc(14% * var(--lines)), transparent);
+  border-radius: calc(8px * var(--round));
+  color: var(--dim);
+  font-size: calc(11.5px * var(--text, 1));
+}
+
 /* An other model's tab (buddy.ts aiPane): its model, which Settings picks, and a new conversation. */
 .b-ai-head {
   flex: 0 0 auto;
