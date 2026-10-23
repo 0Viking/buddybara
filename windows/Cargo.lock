@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "buddybara"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "dbus",
  "gtk",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "buddybara-hook"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "libc",
  "serde_json",
