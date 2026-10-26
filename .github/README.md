@@ -116,7 +116,7 @@ npx tauri build --no-bundle    # the app: windows\target\release\Buddybara.exe
 npm run pack                   # or the installer: windows\release\
 ```
 
-Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.1.2`, matching
+Quit Buddybara before rebuilding: Windows locks a running app. A version tag (`v1.1.3`, matching
 `windows/src-tauri/tauri.conf.json`) publishes the installer as a GitHub release.
 
 ## License
