@@ -20,6 +20,18 @@ export function setClaudePlanUsage(usage: PlanUsage): void {
   State.notify();
 }
 
+/** Claude Code has no plan (an API key, a gateway): numbers kept from before go. */
+export function clearClaudePlanUsage(): void {
+  if (!State.planUsage) return;
+  State.planUsage = null;
+  try {
+    window.localStorage?.removeItem(STORE_KEY);
+  } catch {
+    // Storage off: nothing was kept.
+  }
+  State.notify();
+}
+
 /** The last numbers seen, if any were kept. */
 export function storedClaudePlanUsage(): string | null {
   try {

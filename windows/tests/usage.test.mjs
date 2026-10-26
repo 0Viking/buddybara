@@ -1,13 +1,13 @@
 // The usage box above the panel's Settings (src/buddy/usage.ts): the plan's
-// bars, a conversation's totals, or both, taking turns.
+// bars when Claude Code has a plan, else a conversation's totals.
 
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { installFakeDom } from "./fakedom.mjs";
 
 const dom = installFakeDom();
 globalThis.window ??= globalThis;
-const { renderUsage, TURN_MS } = await import("../src/buddy/usage.ts");
+const { renderUsage } = await import("../src/buddy/usage.ts");
 const { State } = await import("../src/core/state.ts");
 
 const totals = {
@@ -16,46 +16,27 @@ const totals = {
 };
 const plan = { fiveHour: { usedPct: 42, resetsAt: Date.now() + 3_600_000 }, updatedAt: Date.now() };
 
-test("with the cost and the plan's bars both, the box takes turns, the cost first; with one, it holds still", () => {
-  mock.timers.enable({ apis: ["setInterval"] });
+test("a plan's bars win over the dollar totals, whatever the mikan switch; without a plan the totals show", () => {
+  const el = dom.root();
   try {
-    const el = dom.root();
-    State.settings.showPlanInNotch = true;
+    // A plan (a subscription): its bars, and no dollar estimate, mikan switch off or on.
+    State.settings.showPlanInNotch = false;
     State.planUsage = plan;
     renderUsage(el, totals);
-    const [cost, bars] = el.children;
-    const showing = () => [cost, bars].filter((s) => s.style.display !== "none" && !s.classList.contains("off"));
-    assert.deepEqual(showing(), [cost]);
-    mock.timers.tick(TURN_MS);
-    assert.deepEqual(showing(), [bars]);
-    // Redrawn meanwhile (any change of State): the turns go on where they were.
-    renderUsage(el, totals);
-    assert.deepEqual(showing(), [bars]);
-    mock.timers.tick(TURN_MS);
-    assert.deepEqual(showing(), [cost]);
-    // The pointer over the box holds the side it shows.
-    el.fire("mouseenter");
-    mock.timers.tick(3 * TURN_MS);
-    assert.deepEqual(showing(), [cost]);
-    el.fire("mouseleave");
-    mock.timers.tick(TURN_MS);
-    assert.deepEqual(showing(), [bars]);
+    assert.ok(el.querySelector(".b-use-bar"));
+    assert.equal(el.querySelector(".b-use-name"), null);
+    assert.equal(el.style.display, "");
 
-    // One of them only: it shows, and nothing moves.
+    // No plan (an API key, a gateway): the conversation's totals, with their cost.
     State.planUsage = null;
     renderUsage(el, totals);
-    mock.timers.tick(3 * TURN_MS);
-    assert.deepEqual(showing(), [cost]);
-    State.planUsage = plan;
-    renderUsage(el, null);
-    mock.timers.tick(3 * TURN_MS);
-    assert.deepEqual(showing(), [bars]);
-    // Neither (plan usage off, no totals): no box.
-    State.settings.showPlanInNotch = false;
+    assert.equal(el.querySelector(".b-use-bar"), null);
+    assert.equal(el.querySelector(".b-use-name").textContent, "Slash commands");
+
+    // Neither: no box.
     renderUsage(el, null);
     assert.equal(el.style.display, "none");
   } finally {
-    mock.timers.reset();
     State.planUsage = null;
   }
 });

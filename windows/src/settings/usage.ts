@@ -1,8 +1,9 @@
 // Settings → Claude Code → Usage: the plan's limits, as the panel's bars show
 // them (buddy/usage.ts planRows), and a conversation's totals as Claude Code
-// keeps them in its file (code.rs usage): what it cost, how long the API
-// took, how long it has been going. Each shows when it has numbers: an API
-// key has no plan limits, and a conversation may have no totals saved yet.
+// keeps them in its file (code.rs usage): how long the API took, how long it
+// has been going, and, without a plan, what it cost. Each shows when it has
+// numbers: an API key has no plan limits, and on a plan the dollar figure is
+// only Claude Code's estimate, not a bill.
 
 import { Bridge, type SessionUsage } from "../core/bridge";
 import { parseClaudeUsageText, type PlanUsage } from "../core/plan";
@@ -38,27 +39,28 @@ function stat(label: string, value: string, ltr = false): HTMLElement {
   return h("div", { class: "usage-stat" }, h("span", { text: label }), h("b", { text: value, dir: ltr ? "ltr" : undefined }));
 }
 
-/** A conversation's totals, under its name and its project's. */
-function totalsView(u: SessionUsage): HTMLElement[] {
+/** A conversation's totals, under its name and its project's; what it cost only without a plan. */
+function totalsView(u: SessionUsage, withCost: boolean): HTMLElement[] {
   const locale = language();
   const count = new Intl.NumberFormat(locale);
   const parts = [
     h("div", { class: "usage-head" }, h("span", { text: u.title, title: u.title }), h("small", { text: folderName(u.project), title: u.project })),
-    stat(t("Total cost"), usd(u.costUsd, locale)),
+    withCost ? stat(t("Total cost"), usd(u.costUsd, locale)) : null,
     stat(t("Total duration (API)"), duration(u.apiMs, locale)),
     stat(t("Total duration (wall)"), duration(u.wallMs, locale)),
     stat(t("Code changes"), `+${count.format(u.linesAdded)} −${count.format(u.linesRemoved)}`, true),
-    u.unknownCost ? h("div", { class: "hint", text: t("Some models have no known price: the cost leaves them out.") }) : null,
+    withCost && u.unknownCost ? h("div", { class: "hint", text: t("Some models have no known price: the cost leaves them out.") }) : null,
     h("div", { class: "hint", text: t("Claude Code saves these after each run; a conversation still open in VS Code or a terminal can be a little behind.") }),
   ];
   return parts.filter((p): p is HTMLElement => p != null);
 }
 
 /**
- * The card, and `planChanged` for the "Show on the mikan" switch: the plan's
- * numbers are only asked of the account while it is on (`planOn`).
+ * The card, and `planChanged` to draw it again. The plan's numbers are asked
+ * of Claude Code whatever the "Show on the mikan" switch says: it only has
+ * them on a plan, and then they replace the conversation's dollar figure.
  */
-export function usageCard(target: UsageTarget, planOn: () => boolean): { el: HTMLElement; planChanged: () => void } {
+export function usageCard(target: UsageTarget): { el: HTMLElement; planChanged: () => void } {
   const plans = h("div", { class: "usage-part" });
   const totals = h("div", { class: "usage-part" });
   const el = h("div", { class: "card usage-card" },
@@ -66,33 +68,24 @@ export function usageCard(target: UsageTarget, planOn: () => boolean): { el: HTM
     h("div", { class: "stack" }, plans, totals),
   );
 
-  let planDrawn = 0;
-  const drawPlan = async () => {
-    const run = ++planDrawn;
+  let drawn = 0;
+  const draw = async () => {
+    const run = ++drawn;
     plans.style.display = "";
-    if (!planOn()) {
-      plans.replaceChildren(h("div", { class: "hint", text: t("Turn on Plan usage below to see your plan's limits here.") }));
-      return;
-    }
     plans.replaceChildren(h("div", { class: "hint", text: t("Loading…") }));
-    const u = await planUsage().catch(() => null);
-    if (run !== planDrawn) return;
-    // No numbers (an API key, a gateway): the totals alone.
-    if (!u) plans.style.display = "none";
-    plans.replaceChildren(...(u ? [h("div", { class: "usage-head" }, h("span", { text: t("Plan usage") })), ...planRows(u)] : []));
-  };
-
-  const drawTotals = async () => {
     totals.replaceChildren(h("div", { class: "hint", text: t("Loading…") }));
-    try {
-      const u = await Bridge.codeUsage(target.project, target.session);
-      totals.replaceChildren(...(u ? totalsView(u) : [h("div", { class: "hint", text: t("No conversation has saved its usage yet.") })]));
-    } catch (err) {
-      totals.replaceChildren(h("div", { class: "notice err", text: errorText(err) }));
-    }
+    const [u, sum] = await Promise.all([
+      planUsage().catch(() => null),
+      Bridge.codeUsage(target.project, target.session).then((value) => ({ value }), (err: unknown) => ({ err })),
+    ]);
+    if (run !== drawn) return;
+    // No plan (an API key, a gateway): the totals alone, with what they cost.
+    plans.style.display = u ? "" : "none";
+    plans.replaceChildren(...(u ? [h("div", { class: "usage-head" }, h("span", { text: t("Plan usage") })), ...planRows(u)] : []));
+    if ("err" in sum) totals.replaceChildren(h("div", { class: "notice err", text: errorText(sum.err) }));
+    else totals.replaceChildren(...(sum.value ? totalsView(sum.value, !u) : [h("div", { class: "hint", text: t("No conversation has saved its usage yet.") })]));
   };
 
-  void drawPlan();
-  void drawTotals();
-  return { el, planChanged: () => void drawPlan() };
+  void draw();
+  return { el, planChanged: () => void draw() };
 }

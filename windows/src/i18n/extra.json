@@ -4463,17 +4463,6 @@
    "ru": "Изменения кода",
    "id": "Perubahan kode"
   },
-  "Turn on Plan usage below to see your plan's limits here.": {
-   "zh-Hans": "打开下方的“计划用量”，即可在这里查看你的计划限额。",
-   "hi": "यहाँ अपने प्लान की सीमाएँ देखने के लिए नीचे प्लान उपयोग चालू करें।",
-   "es": "Activa Uso del plan más abajo para ver aquí los límites de tu plan.",
-   "ar": "فعّل «استخدام الخطة» أدناه لترى حدود خطتك هنا.",
-   "fr": "Activez Utilisation du forfait plus bas pour voir ici les limites de votre forfait.",
-   "bn": "এখানে আপনার প্ল্যানের সীমা দেখতে নিচে প্ল্যান ব্যবহার চালু করুন।",
-   "pt-BR": "Ative Uso do plano abaixo para ver aqui os limites do seu plano.",
-   "ru": "Включите «Использование плана» ниже, чтобы видеть здесь лимиты плана.",
-   "id": "Aktifkan Penggunaan paket di bawah untuk melihat batas paket Anda di sini."
-  },
   "No conversation has saved its usage yet.": {
    "zh-Hans": "还没有对话保存过用量。",
    "hi": "अभी तक किसी बातचीत ने अपना उपयोग सहेजा नहीं है।",

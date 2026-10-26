@@ -1557,8 +1557,7 @@
 
 /* ── Plan usage above Settings (usage.ts): the session and the week, as on claude.ai ── */
 
-/* Its two sides, the cost and the plan's bars, share one place (usage.ts
-   renderUsage): the box is as tall as the taller one. */
+/* The plan's bars, or without a plan a conversation's totals (usage.ts renderUsage). */
 .b-usage {
   flex: 0 0 auto;
   display: grid;
@@ -1573,28 +1572,11 @@
   background: color-mix(in srgb, var(--tint) calc(4% * var(--lines)), transparent);
 }
 
-/* With both, they take turns: the one leaving fades out, then the other fades in. */
 .b-usage-side {
-  grid-area: 1 / 1;
-  align-self: center;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  transition: opacity 0.35s ease 0.35s, visibility 0s 0.35s;
-}
-
-.b-usage-side.off {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.35s ease, visibility 0s 0.35s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .b-usage-side,
-  .b-usage-side.off {
-    transition: none;
-  }
 }
 
 .b-use-head {

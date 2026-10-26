@@ -1,16 +1,17 @@
-// The usage above the panel's Settings button, whichever the user has: the
-// plan's, as claude.ai shows it (the 5-hour session and the week, each a bar
-// and when it resets), and a conversation's totals, what it cost and how long
-// it took (an API key or a gateway has those only). The plan's numbers are
-// State.planUsage, kept fresh by island/hooks.ts while plan usage is on; the
-// totals are Claude Code's own (code.rs usage). Settings → Claude Code →
-// Usage draws the same bars (planRows).
+// The usage above the panel's Settings button, whichever kind the user has:
+// with a plan (a subscription), its limits as claude.ai shows them (the 5-hour
+// session and the week, each a bar and when it resets); without one (an API
+// key, a gateway), a conversation's totals, what it cost and how long it took.
+// The plan's numbers are State.planUsage, from Claude Code's own /usage
+// (island/hooks.ts), which only has them on a plan; the totals are Claude
+// Code's own (code.rs usage). Settings → Claude Code → Usage draws the same
+// bars (planRows).
 
 import type { SessionUsage } from "../core/bridge";
 import { duration, usd } from "../core/cost";
 import type { PlanUsage, PlanWindow } from "../core/plan";
 import { State } from "../core/state";
-import { clear, h } from "../views/dom";
+import { h } from "../views/dom";
 import { language, t } from "../i18n/i18n";
 
 function row(label: string, w: PlanWindow, weekly: boolean, now: number): HTMLElement {
@@ -48,67 +49,14 @@ function totalsRow(u: SessionUsage): HTMLElement {
   );
 }
 
-/** How long each side shows when the box has both, the cost first. */
-export const TURN_MS = 7000;
-
 /**
- * The box's two sides, the cost and the plan's bars, one over the other: the
- * box keeps the taller one's height, so the list above it never jumps. With
- * both, they take turns (a fade, buddy.css); the pointer over the box holds
- * the one it shows.
- */
-interface Sides {
-  cost: HTMLElement;
-  plan: HTMLElement;
-  showing: "cost" | "plan";
-  timer: number;
-  held: boolean;
-}
-
-const sides = new WeakMap<HTMLElement, Sides>();
-
-function sidesOf(el: HTMLElement): Sides {
-  const known = sides.get(el);
-  if (known) return known;
-  clear(el);
-  const s: Sides = { cost: h("div", { class: "b-usage-side" }), plan: h("div", { class: "b-usage-side" }), showing: "cost", timer: 0, held: false };
-  el.append(s.cost, s.plan);
-  el.addEventListener("mouseenter", () => (s.held = true));
-  el.addEventListener("mouseleave", () => (s.held = false));
-  sides.set(el, s);
-  return s;
-}
-
-function turn(s: Sides, both: boolean) {
-  s.cost.classList.toggle("off", both && s.showing !== "cost");
-  s.plan.classList.toggle("off", both && s.showing !== "plan");
-}
-
-/**
- * Draws the usage into `el`: the plan's bars while plan usage is on and the
- * account has them, `totals` when there are some, taking turns with both.
- * Hidden with neither. Redrawn in place: a turn under way goes on.
+ * Draws the usage into `el`: the plan's bars when Claude Code has a plan (its
+ * limits are what count there, and the dollar figure is only an estimate),
+ * else `totals`. Hidden with neither.
  */
 export function renderUsage(el: HTMLElement, totals: SessionUsage | null, now = Date.now()) {
-  const u = State.settings.showPlanInNotch ? State.planUsage : null;
-  const s = sidesOf(el);
-  const bars = u ? planRows(u, now) : [];
-  s.plan.replaceChildren(...bars);
-  s.cost.replaceChildren(...(totals ? [totalsRow(totals)] : []));
-  s.plan.style.display = bars.length ? "" : "none";
-  s.cost.style.display = totals ? "" : "none";
-  el.style.display = bars.length || totals ? "" : "none";
-  const both = bars.length > 0 && totals != null;
-  if (both && !s.timer) {
-    s.showing = "cost";
-    s.timer = window.setInterval(() => {
-      if (s.held) return;
-      s.showing = s.showing === "cost" ? "plan" : "cost";
-      turn(s, true);
-    }, TURN_MS);
-  } else if (!both && s.timer) {
-    window.clearInterval(s.timer);
-    s.timer = 0;
-  }
-  turn(s, both);
+  const bars = State.planUsage ? planRows(State.planUsage, now) : [];
+  const shown = bars.length ? bars : totals ? [totalsRow(totals)] : [];
+  el.replaceChildren(...(shown.length ? [h("div", { class: "b-usage-side" }, ...shown)] : []));
+  el.style.display = shown.length ? "" : "none";
 }

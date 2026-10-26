@@ -13,7 +13,7 @@ import { pillDefinition } from "../core/pills";
 import { APPROVAL_AGENTS, agentColor, agentName, validateAgent } from "./agents";
 import type { AlertView } from "../core/layout";
 import { parseClaudeUsageText, parseClaudePlan, restorePlanUsage } from "../core/plan";
-import { setClaudePlanUsage, storedClaudePlanUsage } from "../views/usage";
+import { clearClaudePlanUsage, setClaudePlanUsage, storedClaudePlanUsage } from "../views/usage";
 import { N_, t } from "../i18n/i18n";
 
 const CLAUDE_ID = "integration_claude";
@@ -236,23 +236,34 @@ export function registerHookHandlers(island: HookHost) {
   window.setInterval(() => refreshClaudePlan(true), PLAN_POLL_MS);
 }
 
-/** How often the account is asked for the plan usage, and at most how often a finished turn asks again. */
+/**
+ * How often Claude Code is asked for the plan usage, at most how often a
+ * finished turn asks again, and how often once it has said it has no plan.
+ */
 const PLAN_POLL_MS = 5 * 60_000;
 const PLAN_MIN_GAP_MS = 60_000;
+const NO_PLAN_GAP_MS = 30 * 60_000;
 let planAskedAt = -Infinity;
+/** Claude Code answered without plan limits (an API key, a gateway): the dollar totals show instead. */
+let noPlan = false;
 
 /**
- * The plan usage as Claude Code's /usage says it (claude.rs plan_usage), while it shows on the
- * mikan. `force` skips the one-a-minute limit that turn ends are held to.
+ * The plan usage as Claude Code's /usage says it (claude.rs plan_usage): the
+ * panel's and Settings' bars, and the mikan's while "Show on the mikan" is on.
+ * `force` skips the one-a-minute limit that turn ends are held to; without a
+ * plan, it is asked at most every half hour whatever happens.
  */
 export function refreshClaudePlan(force = false) {
-  if (!State.settings.showPlanInNotch) return;
   const now = Date.now();
-  if (!force && now - planAskedAt < PLAN_MIN_GAP_MS) return;
+  const gap = noPlan ? NO_PLAN_GAP_MS : force ? 0 : PLAN_MIN_GAP_MS;
+  if (now - planAskedAt < gap) return;
   planAskedAt = now;
   void Bridge.claudePlanUsage().then((raw) => {
     const usage = parseClaudeUsageText(raw);
+    // No answer at all (not installed, too slow) says nothing about a plan.
+    noPlan = raw != null && !usage;
     if (usage) setClaudePlanUsage(usage);
+    else if (noPlan) clearClaudePlanUsage();
   });
 }
 

@@ -330,7 +330,7 @@ function planCard(status: HookStatus, changed: () => void): HTMLElement {
 let usageFor: UsageTarget = { project: null, session: null };
 
 function claudePage(status: HookStatus): HTMLElement {
-  const usage = usageCard(usageFor, () => settings.showPlanInNotch);
+  const usage = usageCard(usageFor);
   return pageOf("Claude Code", null, usage.el, hooksCard(status), planCard(status, usage.planChanged));
 }
 
