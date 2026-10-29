@@ -443,10 +443,10 @@ function sidebar(): HTMLElement {
         void rerender(false);
       },
     }, svg(p.icon, 18, { stroke: 1.9 }), p.label)),
-    h("div", {
-      class: "side-foot",
-      text: t("No telemetry. Network requests only go to the services you configure yourself."),
-    }),
+    h("div", { class: "side-foot" },
+      h("div", { text: t("No telemetry. Network requests only go to the services you configure yourself.") }),
+      h("div", { class: "side-credit", text: t("Created By {name}", { name: "Yuri Kotoman" }) }),
+    ),
   );
 }
 

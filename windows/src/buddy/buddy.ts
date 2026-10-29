@@ -392,7 +392,8 @@ export class Buddy {
     const headActions = h("div", { class: "b-head-actions" }, pickFolderBtn, addProjectBtn);
     const sideHead = h("div", { class: "b-side-head" }, h("span", { text: tl("Projects") }), headActions);
     const settingsBtn = h("button", { class: "b-icon", title: tl("Settings") }, svg(ICONS.gear, 14));
-    const sideFoot = h("div", { class: "b-side-foot" }, settingsBtn);
+    const credit = h("span", { class: "b-credit", text: tl("Created By {name}", { name: "Yuri Kotoman" }) });
+    const sideFoot = h("div", { class: "b-side-foot" }, settingsBtn, credit);
     const side = h("aside", { class: "b-side" }, this.servicesRow, sideHead, this.newRow, this.list, this.usage, sideFoot);
     const bar = h("div", { class: "b-bar" }, this.back, this.title, this.termBtn, this.modeBtn, this.newBtn, closeBtn);
     const main = h("section", { class: "b-main" },

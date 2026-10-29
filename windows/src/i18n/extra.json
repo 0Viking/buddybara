@@ -5727,6 +5727,17 @@
    "pt-BR": "Máquina de escrever",
    "ru": "Печатная машинка",
    "id": "Mesin tik"
+  },
+  "Created By {name}": {
+   "zh-Hans": "由 {name} 创建",
+   "hi": "{name} द्वारा बनाया गया",
+   "es": "Creado por {name}",
+   "ar": "من إنشاء {name}",
+   "fr": "Créé par {name}",
+   "bn": "{name} তৈরি করেছেন",
+   "pt-BR": "Criado por {name}",
+   "ru": "Автор: {name}",
+   "id": "Dibuat oleh {name}"
   }
  }
 }

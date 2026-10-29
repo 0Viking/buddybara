@@ -150,6 +150,10 @@ button.nav:active {
   line-height: 1.4;
 }
 
+.side-credit {
+  margin-top: 8px;
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 .main {
