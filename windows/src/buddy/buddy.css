@@ -249,13 +249,14 @@
   border-top: 1px solid color-mix(in srgb, var(--tint) calc(6% * var(--lines)), transparent);
 }
 
+/* A fixed size, whatever the text size: the whole name fits beside the gear. */
 .b-credit {
   flex: 1 1 auto;
   min-width: 0;
-  margin-left: 8px;
+  margin-left: 6px;
   overflow: hidden;
   color: var(--dim-3);
-  font-size: calc(10.5px * var(--text, 1));
+  font-size: 9.5px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

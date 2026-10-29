@@ -150,8 +150,10 @@ button.nav:active {
   line-height: 1.4;
 }
 
+/* A fixed size, whatever the text size (like the panel's). */
 .side-credit {
   margin-top: 8px;
+  font-size: 11.5px;
 }
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
