@@ -5595,6 +5595,138 @@
    "pt-BR": "Mostra o uso do seu plano Claude (limites de 5 horas e semanal) na tangerina. O Claude Code informa a cada poucos minutos com o próprio login, que o Buddybara nunca lê. Só planos Pro e Max.",
    "ru": "Показывает использование вашего тарифа Claude (лимиты на 5 часов и на неделю) на мандарине. Claude Code сообщает его каждые несколько минут через собственный вход, который Buddybara никогда не читает. Только тарифы Pro и Max.",
    "id": "Menampilkan pemakaian paket Claude Anda (batas 5 jam dan mingguan) di jeruk. Claude Code melaporkannya setiap beberapa menit dengan login miliknya sendiri, yang tidak pernah dibaca Buddybara. Hanya paket Pro dan Max."
+  },
+  "Modern": {
+   "zh-Hans": "现代",
+   "hi": "आधुनिक",
+   "es": "Moderna",
+   "ar": "عصري",
+   "fr": "Moderne",
+   "bn": "আধুনিক",
+   "pt-BR": "Moderna",
+   "ru": "Современный",
+   "id": "Modern"
+  },
+  "Gentle": {
+   "zh-Hans": "柔和",
+   "hi": "कोमल",
+   "es": "Suave",
+   "ar": "ناعم",
+   "fr": "Douce",
+   "bn": "কোমল",
+   "pt-BR": "Suave",
+   "ru": "Мягкий",
+   "id": "Lembut"
+  },
+  "Casual": {
+   "zh-Hans": "随性",
+   "hi": "अनौपचारिक",
+   "es": "Informal",
+   "ar": "عفوي",
+   "fr": "Décontractée",
+   "bn": "সাধারণ",
+   "pt-BR": "Descontraída",
+   "ru": "Непринуждённый",
+   "id": "Santai"
+  },
+  "Wide": {
+   "zh-Hans": "宽松",
+   "hi": "चौड़ा",
+   "es": "Ancha",
+   "ar": "عريض",
+   "fr": "Large",
+   "bn": "চওড়া",
+   "pt-BR": "Larga",
+   "ru": "Широкий",
+   "id": "Lebar"
+  },
+  "Compact": {
+   "zh-Hans": "紧凑",
+   "hi": "सघन",
+   "es": "Compacta",
+   "ar": "مضغوط",
+   "fr": "Compacte",
+   "bn": "ঘন",
+   "pt-BR": "Compacta",
+   "ru": "Компактный",
+   "id": "Rapat"
+  },
+  "Classic": {
+   "zh-Hans": "经典",
+   "hi": "क्लासिक",
+   "es": "Clásica",
+   "ar": "كلاسيكي",
+   "fr": "Classique",
+   "bn": "ক্লাসিক",
+   "pt-BR": "Clássica",
+   "ru": "Классический",
+   "id": "Klasik"
+  },
+  "Elegant": {
+   "zh-Hans": "优雅",
+   "hi": "सुरुचिपूर्ण",
+   "es": "Elegante",
+   "ar": "أنيق",
+   "fr": "Élégante",
+   "bn": "মার্জিত",
+   "pt-BR": "Elegante",
+   "ru": "Изящный",
+   "id": "Elegan"
+  },
+  "Bookish": {
+   "zh-Hans": "书卷",
+   "hi": "किताबी",
+   "es": "Libresca",
+   "ar": "كتبي",
+   "fr": "Livresque",
+   "bn": "বইয়ের মতো",
+   "pt-BR": "Livresca",
+   "ru": "Книжный",
+   "id": "Gaya buku"
+  },
+  "Handwritten": {
+   "zh-Hans": "手写",
+   "hi": "हस्तलिखित",
+   "es": "Manuscrita",
+   "ar": "بخط اليد",
+   "fr": "Manuscrite",
+   "bn": "হাতে লেখা",
+   "pt-BR": "Manuscrita",
+   "ru": "Рукописный",
+   "id": "Tulisan tangan"
+  },
+  "Marker": {
+   "zh-Hans": "马克笔",
+   "hi": "मार्कर",
+   "es": "Rotulador",
+   "ar": "قلم عريض",
+   "fr": "Feutre",
+   "bn": "মার্কার",
+   "pt-BR": "Marcador",
+   "ru": "Маркер",
+   "id": "Spidol"
+  },
+  "Comic": {
+   "zh-Hans": "漫画",
+   "hi": "कॉमिक",
+   "es": "Cómic",
+   "ar": "كوميدي",
+   "fr": "Bande dessinée",
+   "bn": "কমিক",
+   "pt-BR": "Quadrinhos",
+   "ru": "Комикс",
+   "id": "Komik"
+  },
+  "Typewriter": {
+   "zh-Hans": "打字机",
+   "hi": "टाइपराइटर",
+   "es": "Máquina de escribir",
+   "ar": "آلة كاتبة",
+   "fr": "Machine à écrire",
+   "bn": "টাইপরাইটার",
+   "pt-BR": "Máquina de escrever",
+   "ru": "Печатная машинка",
+   "id": "Mesin tik"
   }
  }
 }

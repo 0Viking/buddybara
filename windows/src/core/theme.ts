@@ -36,13 +36,34 @@ const SCRIPTS = `"Segoe UI Emoji", "Nirmala UI", "Microsoft YaHei UI", "Microsof
   + `"Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans SC", `
   + `"Droid Sans Fallback", sans-serif`;
 
-/** The fonts a scheme may set: Nunito comes with Buddybara, the others with Windows. */
+/** What a font falls back to, by kind, when the PC doesn't have it. */
+const SANS = `"Segoe UI Variable Text", "Segoe UI", system-ui`;
+const SERIF = `Georgia, Cambria, "Times New Roman"`;
+const MONO = `Consolas, ui-monospace`;
+
+/**
+ * The fonts a scheme may set, sans first, then serifs, handwriting and
+ * monospace: Nunito comes with Buddybara, the others with Windows 10 and 11
+ * (Settings lists those a PC has). The ids are stored: never rename one.
+ */
 export const FONTS = [
   { id: "rounded", label: N_("Rounded"), family: "Nunito", stack: `"Nunito", system-ui, "Segoe UI Variable Text", "Segoe UI", ${SCRIPTS}` },
   { id: "clean", label: N_("Clean"), family: "Segoe UI", stack: `"Segoe UI Variable Text", "Segoe UI", system-ui, ${SCRIPTS}` },
-  { id: "geometric", label: N_("Geometric"), family: "Bahnschrift", stack: `Bahnschrift, "Segoe UI Variable Text", "Segoe UI", system-ui, ${SCRIPTS}` },
-  { id: "serif", label: N_("Serif"), family: "Georgia", stack: `Georgia, Cambria, "Times New Roman", ${SCRIPTS}` },
-  { id: "mono", label: N_("Monospace"), family: "Cascadia Mono", stack: `"Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, ${SCRIPTS}` },
+  { id: "modern", label: N_("Modern"), family: "Calibri", stack: `Calibri, ${SANS}, ${SCRIPTS}` },
+  { id: "gentle", label: N_("Gentle"), family: "Candara", stack: `Candara, Calibri, ${SANS}, ${SCRIPTS}` },
+  { id: "casual", label: N_("Casual"), family: "Trebuchet MS", stack: `"Trebuchet MS", ${SANS}, ${SCRIPTS}` },
+  { id: "wide", label: N_("Wide"), family: "Verdana", stack: `Verdana, ${SANS}, ${SCRIPTS}` },
+  { id: "compact", label: N_("Compact"), family: "Tahoma", stack: `Tahoma, ${SANS}, ${SCRIPTS}` },
+  { id: "geometric", label: N_("Geometric"), family: "Bahnschrift", stack: `Bahnschrift, ${SANS}, ${SCRIPTS}` },
+  { id: "serif", label: N_("Serif"), family: "Georgia", stack: `${SERIF}, ${SCRIPTS}` },
+  { id: "classic", label: N_("Classic"), family: "Constantia", stack: `Constantia, ${SERIF}, ${SCRIPTS}` },
+  { id: "elegant", label: N_("Elegant"), family: "Palatino Linotype", stack: `"Palatino Linotype", Palatino, ${SERIF}, ${SCRIPTS}` },
+  { id: "book", label: N_("Bookish"), family: "Sitka Text", stack: `"Sitka Text", Sitka, ${SERIF}, ${SCRIPTS}` },
+  { id: "handwritten", label: N_("Handwritten"), family: "Segoe Print", stack: `"Segoe Print", "Ink Free", ${SANS}, ${SCRIPTS}` },
+  { id: "marker", label: N_("Marker"), family: "Ink Free", stack: `"Ink Free", "Segoe Print", ${SANS}, ${SCRIPTS}` },
+  { id: "comic", label: N_("Comic"), family: "Comic Sans MS", stack: `"Comic Sans MS", ${SANS}, ${SCRIPTS}` },
+  { id: "mono", label: N_("Monospace"), family: "Cascadia Mono", stack: `"Cascadia Mono", "Cascadia Code", ${MONO}, ${SCRIPTS}` },
+  { id: "typewriter", label: N_("Typewriter"), family: "Courier New", stack: `"Courier New", Courier, ${MONO}, ${SCRIPTS}` },
 ] as const;
 
 /** How round every corner is, as a share of the radius the CSS draws (--round). */

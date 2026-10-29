@@ -19,6 +19,32 @@ import { pageOf } from "./parts";
 
 const RESET_ICON = "M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5";
 
+/** Which fonts this PC has, measured once each. */
+const fontsSeen = new Map<string, boolean>();
+
+/**
+ * Whether Windows has `family`: text drawn in it measures otherwise than in
+ * the generic font it would fall back to, for at least one of three. Nunito
+ * comes with Buddybara (`rounded`): always there.
+ */
+function fontInstalled(id: string, family: string): boolean {
+  if (id === "rounded") return true;
+  const known = fontsSeen.get(family);
+  if (known !== undefined) return known;
+  const ctx = document.createElement("canvas").getContext("2d");
+  let found = true;
+  if (ctx) {
+    const sample = "mmmmmmmmmmlli1WQ@#&gy";
+    const width = (font: string) => {
+      ctx.font = font;
+      return ctx.measureText(sample).width;
+    };
+    found = ["monospace", "serif", "sans-serif"].some((base) => width(`72px "${family}", ${base}`) !== width(`72px ${base}`));
+  }
+  fontsSeen.set(family, found);
+  return found;
+}
+
 /** Redraws the skin card on the page now, if it is on screen. */
 let refreshSkins: (() => void) | null = null;
 // Back from the skins folder (pictures added there): the tiles show them.
@@ -247,10 +273,10 @@ export function customizePage(settings: Settings, save: () => Promise<void>): HT
     clear(style);
     const look = themeLook(settings.theme, custom());
     const row = <T extends { id: string; label: string }>(
-      key: string, title: string, list: readonly T[], current: T, describe: (x: T) => string,
+      key: string, title: string, list: readonly T[], current: T, describe: (x: T) => string, look?: (x: T) => string,
     ) => {
       const select = h("select", { "aria-label": t(title) }) as HTMLSelectElement;
-      for (const x of list) select.append(h("option", { value: x.id, text: describe(x) }));
+      for (const x of list) select.append(h("option", { value: x.id, text: describe(x), style: look ? look(x) : undefined }));
       select.value = current.id;
       select.addEventListener("change", () => {
         setCustom(key, select.value);
@@ -263,7 +289,9 @@ export function customizePage(settings: Settings, save: () => Promise<void>): HT
     style.append(
       h("h2", {}, h("span", { text: t("Style") })),
       h("div", { class: "colors" },
-        row("font", N_("Font"), FONTS, look.font, (f) => `${t(f.label)} · ${f.family}`),
+        // The fonts this PC has (and the one picked, whatever), each shown in itself.
+        row("font", N_("Font"), FONTS.filter((f) => f === look.font || fontInstalled(f.id, f.family)), look.font,
+          (f) => `${t(f.label)} · ${f.family}`, (f) => `font-family:${f.stack}`),
         row("corners", N_("Corners"), CORNERS, look.corners, (c) => t(c.label)),
         row("lines", N_("Lines"), LINES, look.lines, (l) => t(l.label)),
         // Not part of the scheme: another one picked keeps it.
