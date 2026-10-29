@@ -192,6 +192,13 @@ export interface CodeRunEvent {
   tokens?: number | null;
 }
 
+/** What an edition's MCP call came to (edition.rs Called): the tool's content, or why it didn't answer. */
+export interface EditionCall {
+  state: "connected" | "needsAuth" | "failed" | "pending" | "disabled" | "missing";
+  content?: { type: string; text?: string }[];
+  error?: string;
+}
+
 /** A plugin's pane open in a run (code.rs `ui_panes`). */
 export interface PaneInfo {
   id: string;
@@ -386,6 +393,11 @@ export const Bridge = {
   codeSay: (run: number, prompt: string, attachments: string[] = []) =>
     callOrThrow<boolean>("code_say", { run, prompt, attachments }),
   codeStop: (run: number) => call<void>("code_stop", { run }),
+  /** An edition's page calls one of the MCP tools its build names, through Claude Code (edition.rs). */
+  editionMcpCall: (tool: string, args: Record<string, unknown> = {}) =>
+    callOrThrow<EditionCall>("edition_mcp_call", { tool, arguments: args }),
+  /** Signs Claude Code in to one of the MCP servers the edition's build names (the browser opens); resolves when done. */
+  editionMcpLogin: (server: string) => callOrThrow<void>("edition_mcp_login", { server }),
   /** A plugin's pane asks its run (code.rs `ui`): `ui_render`, `ui_press`, `ui_input`, `ui_select`, `ui_close`… */
   codeUi: <T = unknown>(run: number, request: Record<string, unknown>) => callOrThrow<T>("code_ui", { run, request }),
   /** Writes a pasted file into the inbox. The bytes go as they are; `name` must be plain ASCII. */

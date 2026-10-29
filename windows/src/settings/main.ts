@@ -383,7 +383,26 @@ function languageSelect(): HTMLElement {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-type PageId = "general" | "customize" | "claude" | "agents" | "models" | "skills" | "plugins" | "connectors" | "integrations";
+/**
+ * A page an edition adds (scripts/pack.mjs --edition): a module in
+ * src/edition, which is kept outside the repository, exporting `pages`. It
+ * names itself in the interface language (an edition brings its own words),
+ * and may call the MCP tools its build names (edition.rs).
+ */
+export interface EditionPage {
+  /** Letters, digits and dashes; unique. */
+  id: string;
+  label: () => string;
+  /** A 24×24 path, drawn like the others. */
+  icon: string;
+  render: () => HTMLElement;
+}
+
+const EDITION_PAGES: EditionPage[] = Object.values(import.meta.glob<{ pages?: EditionPage[] }>("../edition/*.ts", { eager: true }))
+  .flatMap((m) => m.pages ?? [])
+  .filter((p) => /^[a-z0-9-]+$/.test(p.id));
+
+type PageId = "general" | "customize" | "claude" | "agents" | "models" | "skills" | "plugins" | "connectors" | "integrations" | `edition:${string}`;
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "general", label: N_("General"), icon: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4" },
@@ -397,6 +416,14 @@ const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "integrations", label: N_("Integrations"), icon: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
 ];
 
+/** Every page of the sidebar: Buddybara's (their labels translated when drawn), then the edition's. */
+function allPages(): { id: PageId; label: string; icon: string }[] {
+  return [
+    ...PAGES.map((p) => ({ ...p, label: t(p.label) })),
+    ...EDITION_PAGES.map((p) => ({ id: `edition:${p.id}` as PageId, label: p.label(), icon: p.icon })),
+  ];
+}
+
 let page: PageId = "general";
 
 function sidebar(): HTMLElement {
@@ -405,7 +432,7 @@ function sidebar(): HTMLElement {
       mascot,
       h("div", {}, h("b", { text: "Buddybara" }), h("small", { text: version ? `v${version}` : "" })),
     ),
-    ...PAGES.map((p) => h("button", {
+    ...allPages().map((p) => h("button", {
       class: p.id === page ? "nav on" : "nav",
       "aria-current": p.id === page ? "page" : undefined,
       onclick: () => {
@@ -415,7 +442,7 @@ function sidebar(): HTMLElement {
         usageFor = { project: null, session: null };
         void rerender(false);
       },
-    }, svg(p.icon, 18, { stroke: 1.9 }), t(p.label))),
+    }, svg(p.icon, 18, { stroke: 1.9 }), p.label)),
     h("div", {
       class: "side-foot",
       text: t("No telemetry. Network requests only go to the services you configure yourself."),
@@ -498,7 +525,7 @@ async function main() {
   });
   // Opened for one page (the panel's first-run screen: Claude Code).
   void onEvent<string>("settings-page", (p) => {
-    if (p === page || !PAGES.some((x) => x.id === p)) return;
+    if (p === page || !allPages().some((x) => x.id === p)) return;
     page = p as PageId;
     void rerender(false);
   });
@@ -549,6 +576,8 @@ async function render() {
     body = connectorsPage();
   } else if (page === "customize") {
     body = customizePage(settings, save);
+  } else if (page.startsWith("edition:")) {
+    body = EDITION_PAGES.find((p) => `edition:${p.id}` === page)?.render() ?? generalPage();
   } else {
     body = generalPage();
   }

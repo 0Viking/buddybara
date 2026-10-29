@@ -6,3 +6,6 @@ updates.md
 
 # Private plans
 slash-commands-plan.md
+
+# An edition's own pages, copied in when it is built (settings/main.ts EditionPage)
+windows/src/edition/

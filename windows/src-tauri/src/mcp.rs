@@ -379,7 +379,7 @@ fn signing_in() -> MutexGuard<'static, Option<Arc<platform::Pty>>> {
 /// `claude mcp login <id>`, in a console of its own where there is one
 /// (Windows): Claude Code wants a terminal for its sign-in, and opens the
 /// provider's page in the browser itself. Given up after LOGIN_LIMIT.
-fn login(id: &str) -> Result<(), String> {
+pub(crate) fn login(id: &str) -> Result<(), String> {
     let exe = crate::code::claude_exe().ok_or_else(|| t("Claude Code isn't installed: `claude` was not found."))?;
     let args = ["mcp", "login", id].map(String::from);
     let (pty, mut reader) = match platform::Pty::spawn(&exe, &args, &platform::home_dir(), 120, 32, &[]) {

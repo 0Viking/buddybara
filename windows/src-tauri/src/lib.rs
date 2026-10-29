@@ -8,6 +8,7 @@ mod code;
 mod config_file;
 mod desktop;
 mod directory;
+mod edition;
 mod files;
 mod github;
 mod hooks;
@@ -717,6 +718,8 @@ pub fn run() {
             directory::connector_search,
             directory::plugin_install,
             directory::plugin_uninstall,
+            edition::edition_mcp_call,
+            edition::edition_mcp_login,
             addons::addon_pick,
             addons::addon_inspect,
             addons::addon_add_marketplace,

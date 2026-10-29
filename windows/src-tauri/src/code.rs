@@ -52,7 +52,7 @@ const EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
 /// The `--settings` layer of a run with Ultracode on.
 const ULTRACODE_ON: &str = r#"{"ultracode":true}"#;
 /// What a run's session file says started it (CLAUDE_CODE_ENTRYPOINT).
-const ENTRYPOINT: &str = "buddybara";
+pub(crate) const ENTRYPOINT: &str = "buddybara";
 /// Settings → Integrations: the keys Claude may use, and the environment names
 /// the tools read them from (`gh` and the GitHub API, Obsidian's Local REST API).
 /// A fixed list: nothing from the page decides what goes into a process.
