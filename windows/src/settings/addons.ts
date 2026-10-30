@@ -195,19 +195,21 @@ const SOURCE: Record<InstalledPlugin["source"], string> = {
 };
 
 function pluginCard(p: InstalledPlugin, redraw: () => void): HTMLElement {
-  const busy = pluginBusy.has(p.id);
+  // A plugin can be installed twice, for the user and for a project: one card each.
+  const key = `${p.id}|${p.project}`;
+  const busy = pluginBusy.has(key);
   const managed = p.source === "managed";
   const act = async (action: "enable" | "disable" | "update" | "uninstall") => {
-    pluginBusy.add(p.id);
-    pluginErrors.delete(p.id);
+    pluginBusy.add(key);
+    pluginErrors.delete(key);
     redraw();
     try {
-      await Bridge.pluginAction(p.id, action);
-      pluginBusy.delete(p.id);
+      await Bridge.pluginAction(p, action);
+      pluginBusy.delete(key);
       installedChanged();
     } catch (err) {
-      pluginBusy.delete(p.id);
-      pluginErrors.set(p.id, errorText(err));
+      pluginBusy.delete(key);
+      pluginErrors.set(key, errorText(err));
       redraw();
     }
   };
@@ -232,18 +234,21 @@ function pluginCard(p: InstalledPlugin, redraw: () => void): HTMLElement {
     controls.push(sw, update, remove);
   }
   const source = SOURCE[p.source] ? t(SOURCE[p.source]) : p.marketplace;
-  const error = pluginErrors.get(p.id);
+  const project = p.project.split(/[\\/]/).filter(Boolean).pop();
+  const where = project ? t("Only in {project}", { project }) : "";
+  const error = pluginErrors.get(key);
   return h("div", { class: p.enabled ? "dir-card ok" : "dir-card off" },
     h("div", { class: "dir-top" },
       markTile(p.name, p.name, p.enabled ? "on" : undefined),
       h("div", { class: "dir-title" },
         h("div", { class: "conn-name", text: p.name, title: p.id }),
-        h("div", { class: "conn-sub" }, h("span", { text: [source, p.version].filter(Boolean).join(" · ") })),
+        h("div", { class: "conn-sub", title: p.project || undefined },
+          h("span", { text: [source, p.version, where].filter(Boolean).join(" · ") })),
       ),
     ),
     h("div", { class: "dir-summary", text: p.description, title: p.description }),
     error ? h("div", { class: "dir-error", text: error, title: error }) : null,
-    h("div", { class: "dir-foot" }, tags, ...controls),
+    h("div", { class: "dir-foot wrap" }, tags, h("div", { class: "dir-controls" }, ...controls)),
   );
 }
 

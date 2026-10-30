@@ -839,6 +839,11 @@ html[dir="rtl"] .stack.svc-keys {
   margin-top: auto;
 }
 
+/* Tags, then the buttons on the right: on a row of their own when both don't fit. */
+.dir-foot.wrap {
+  flex-wrap: wrap;
+}
+
 .dir-parts {
   display: flex;
   flex-wrap: wrap;
@@ -854,6 +859,18 @@ html[dir="rtl"] .stack.svc-keys {
   color: var(--dim);
   font-size: calc(10.5px * var(--text, 1));
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.dir-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dir-foot.wrap > button {
+  margin-left: auto;
 }
 
 .dir-foot button {

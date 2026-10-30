@@ -1075,6 +1075,20 @@ pub struct InstalledPlugin {
     hooks: usize,
     /// "directory" | "official" | "managed" (by the organization: not the user's to change) | "yours" | "other"
     source: &'static str,
+    /// Where Claude Code installed it: "user", "project" or "local" (one project only), "managed".
+    /// A plugin can be there twice, for the user and for a project.
+    scope: String,
+    /// The project of a "project" or "local" install; empty otherwise.
+    project: String,
+}
+
+/// The scopes `claude plugin <action> --scope` takes from Settings, and whether one belongs to a project.
+fn project_scope(scope: &str) -> Option<bool> {
+    match scope {
+        "user" => Some(false),
+        "project" | "local" => Some(true),
+        _ => None,
+    }
 }
 
 fn source_of(marketplace: &str, scope: &str) -> &'static str {
@@ -1101,8 +1115,12 @@ pub async fn plugins_installed() -> Result<Vec<InstalledPlugin>, String> {
                 let info = plugin_info(Path::new(&text(v, "installPath"))).unwrap_or_default();
                 let servers = v.get("mcpServers").and_then(Value::as_object).map_or(0, |s| s.len())
                     .max(info.runs.iter().filter(|r| matches!(r.kind, "server" | "remote")).count());
+                let scope = text(v, "scope");
+                let project = if project_scope(&scope) == Some(true) { text(v, "projectPath") } else { String::new() };
                 Some(InstalledPlugin {
-                    source: source_of(&marketplace, &text(v, "scope")),
+                    source: source_of(&marketplace, &scope),
+                    scope,
+                    project,
                     version: text(v, "version"),
                     enabled: v.get("enabled").and_then(Value::as_bool).unwrap_or(false),
                     description: info.description,
@@ -1115,7 +1133,8 @@ pub async fn plugins_installed() -> Result<Vec<InstalledPlugin>, String> {
                 })
             })
             .collect();
-        plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        // The user's install of a plugin first, then the projects'.
+        plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.project.cmp(&b.project)));
         Ok(plugins)
     })
     .await
@@ -1130,17 +1149,32 @@ fn plugin_id(id: &str) -> Result<(String, String), String> {
 }
 
 /// Settings → Plugins → Installed: on/off, Update, Uninstall, by Claude Code.
+/// `scope` and `project` are the card's (plugins_installed): a project's install
+/// is changed from that project's folder, the user's from the home folder.
 #[tauri::command]
-pub async fn plugin_action(app: AppHandle, id: String, action: String) -> Result<(), String> {
+pub async fn plugin_action(app: AppHandle, id: String, action: String, scope: Option<String>, project: Option<String>) -> Result<(), String> {
     let (name, market) = plugin_id(&id)?;
     if !matches!(action.as_str(), "enable" | "disable" | "update" | "uninstall") {
         return Err(format!("unknown action {action}"));
     }
-    crate::log::line(format!("addons: {action} {id}"));
+    let scope = scope.unwrap_or_else(|| "user".into());
+    let dir = match project_scope(&scope) {
+        Some(false) => platform::home_dir(),
+        Some(true) => {
+            let dir = PathBuf::from(project.unwrap_or_default());
+            if !dir.is_absolute() || !dir.is_dir() {
+                return Err(tf("The project folder {path} isn't there any more.", &[("path", &dir.to_string_lossy())]));
+            }
+            dir
+        }
+        None => return Err(format!("unknown scope {scope}")),
+    };
+    crate::log::line(format!("addons: {action} {id} ({scope})"));
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        mcp::claude(&["plugin", &action, &id], CLI_LIMIT).map_err(directory::message_of)?;
-        // One of Buddybara's own, uninstalled: its copy goes too.
-        if action == "uninstall" && market == MARKETPLACE {
+        mcp::claude_in(&dir, &["plugin", &action, &id, "--scope", &scope], CLI_LIMIT).map_err(directory::message_of)?;
+        // One of Buddybara's own, uninstalled for the user: its copy goes too
+        // (a project's install of it still reads the same copy).
+        if action == "uninstall" && market == MARKETPLACE && scope == "user" {
             let copy = market_dir().join(&name);
             if copy.exists() {
                 let _ = platform::move_to_trash(std::slice::from_ref(&copy));

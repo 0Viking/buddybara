@@ -133,6 +133,10 @@ export interface InstalledPlugin {
   servers: number;
   hooks: number;
   source: "directory" | "official" | "managed" | "yours" | "other";
+  /** Where Claude Code installed it: "user", "project" or "local" (one project only), "managed". */
+  scope: string;
+  /** The project of a "project" or "local" install; empty otherwise. */
+  project: string;
 }
 
 export interface MySkill {
@@ -319,9 +323,9 @@ export const Bridge = {
   addonInstallFrom: (id: string, plugin: string, trust: boolean) =>
     callOrThrow<string[]>("addon_install_from", { id, plugin, trust }),
   pluginsInstalled: () => callOrThrow<InstalledPlugin[]>("plugins_installed"),
-  /** On, off, update or uninstall an installed plugin, by its `name@marketplace`. */
-  pluginAction: (id: string, action: "enable" | "disable" | "update" | "uninstall") =>
-    callOrThrow<void>("plugin_action", { id, action }),
+  /** On, off, update or uninstall an installed plugin: by its `name@marketplace`, in its scope (and project). */
+  pluginAction: (p: Pick<InstalledPlugin, "id" | "scope" | "project">, action: "enable" | "disable" | "update" | "uninstall") =>
+    callOrThrow<void>("plugin_action", { id: p.id, action, scope: p.scope, project: p.project || null }),
   /** The user's own skills and commands (~/.claude/skills, ~/.claude/commands). */
   skillsMine: () => callOrThrow<MySkill[]>("skills_mine"),
   skillRemove: (name: string, kind: MySkill["kind"]) => callOrThrow<void>("skill_remove", { name, kind }),

@@ -5738,6 +5738,28 @@
    "pt-BR": "Criado por {name}",
    "ru": "Автор: {name}",
    "id": "Dibuat oleh {name}"
+  },
+  "Only in {project}": {
+   "zh-Hans": "仅限 {project}",
+   "hi": "केवल {project} में",
+   "es": "Solo en {project}",
+   "ar": "في {project} فقط",
+   "fr": "Seulement dans {project}",
+   "bn": "শুধু {project}-এ",
+   "pt-BR": "Só em {project}",
+   "ru": "Только в {project}",
+   "id": "Hanya di {project}"
+  },
+  "The project folder {path} isn't there any more.": {
+   "zh-Hans": "项目文件夹 {path} 已经不在了。",
+   "hi": "प्रोजेक्ट फ़ोल्डर {path} अब वहाँ नहीं है।",
+   "es": "La carpeta del proyecto {path} ya no está.",
+   "ar": "مجلد المشروع {path} لم يعد موجودًا.",
+   "fr": "Le dossier du projet {path} n’est plus là.",
+   "bn": "প্রজেক্ট ফোল্ডার {path} আর সেখানে নেই।",
+   "pt-BR": "A pasta do projeto {path} não está mais lá.",
+   "ru": "Папки проекта {path} там уже нет.",
+   "id": "Folder proyek {path} sudah tidak ada."
   }
  }
 }

@@ -6,6 +6,7 @@
 // the page can only name a catalog entry: the addresses live here.
 
 use std::io::Read;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
@@ -299,7 +300,12 @@ fn last_line(text: &str) -> Option<String> {
 /// `claude` with `args`, from the home folder, with no console window, given up
 /// after `limit`. Its output, or what it said went wrong.
 pub(crate) fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
-    let (ok, out, err) = claude_run(args, limit)?;
+    claude_in(&platform::home_dir(), args, limit)
+}
+
+/// `claude()` from another folder: a project, for what Claude Code keeps per project.
+pub(crate) fn claude_in(dir: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
+    let (ok, out, err) = claude_run_in(dir, args, limit)?;
     if ok {
         Ok(out)
     } else {
@@ -310,10 +316,14 @@ pub(crate) fn claude(args: &[&str], limit: Duration) -> Result<String, String> {
 /// `claude` with `args` as `claude` runs it: whether it succeeded, and all it
 /// printed (stdout, stderr), for a caller that reads a failure's whole report.
 pub(crate) fn claude_run(args: &[&str], limit: Duration) -> Result<(bool, String, String), String> {
+    claude_run_in(&platform::home_dir(), args, limit)
+}
+
+fn claude_run_in(dir: &Path, args: &[&str], limit: Duration) -> Result<(bool, String, String), String> {
     let exe = crate::code::claude_exe().ok_or_else(|| t("Claude Code isn't installed: `claude` was not found."))?;
     let mut cmd = Command::new(exe);
     cmd.args(args)
-        .current_dir(platform::home_dir())
+        .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

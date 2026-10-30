@@ -109,7 +109,7 @@ function card(e: DirEntry, redraw: () => void): HTMLElement {
     ),
     h("div", { class: "dir-summary", text: e.summary, title: e.summary }),
     error ? h("div", { class: "dir-error", text: error, title: error }) : null,
-    h("div", { class: "dir-foot" }, parts(e), button),
+    h("div", { class: "dir-foot wrap" }, parts(e), button),
   );
 }
 
