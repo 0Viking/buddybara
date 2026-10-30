@@ -361,7 +361,8 @@ body {
   position: relative;
   width: 32px;
   height: 18px;
-  border-radius: calc(9px * var(--round));
+  /* A switch stays a pill, whatever the corners setting. */
+  border-radius: 999px;
   background: color-mix(in srgb, var(--tint) calc(15% * var(--lines)), transparent);
   flex: 0 0 32px;
   transition: background 0.18s;

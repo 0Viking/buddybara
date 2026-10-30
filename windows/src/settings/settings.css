@@ -373,7 +373,8 @@ select:focus-visible {
   flex: 0 0 40px;
   padding: 0;
   border: 0;
-  border-radius: calc(12px * var(--round));
+  /* A switch stays a pill, whatever the corners setting. */
+  border-radius: 999px;
   background: color-mix(in srgb, var(--card) 86%, var(--ink));
 }
 
