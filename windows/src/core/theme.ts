@@ -108,11 +108,11 @@ export const SCHEMES: Scheme[] = [
       "bubble-ink": "#efe6dc", code: "#e3d8cc", "code-bg": "#100c0a", link: "#ffb27a", tint: "#ffecd6",
     },
   },
-  // Sunset: golden-hour orange-yellow, a night-blue sidebar, purple messages and a burnt-orange accent.
+  // Sunset: golden-hour sand, a dusk-violet sidebar, purple messages, a burnt-orange accent and handwriting.
   {
-    id: "sunset", name: "Sunset", font: "rounded", corners: "pill", lines: "faint",
+    id: "sunset", name: "Sunset", font: "handwritten", corners: "pill", lines: "faint",
     colors: {
-      bg: "#ffe1a6", side: "#1d2350", "side-ink": "#ffe9c7", card: "#fff0d2", ink: "#2a170a", dim: "#74502d",
+      bg: "#eccb89", side: "#3c2c68", "side-ink": "#ffe9c7", card: "#f3e0ba", ink: "#2a170a", dim: "#74502d",
       mikan: "#b8420c", "mikan-ink": "#fff6ec", composer: "#fff6e4", selected: "#6b2d93", "selected-ink": "#fff3ff", bubble: "#6b2d93",
       "bubble-ink": "#fff3ff", code: "#1e2f78", "code-bg": "#fff3dc", link: "#2433a0", tint: "#5a300d",
     },
