@@ -89,6 +89,9 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         // Where Buddybara sits on the desktop is desktop.rs's to say, not a webview's.
         let mut settings = settings.clone();
         settings.desktop_buddybara = current.desktop_buddybara.clone();
+        // So is the panel's size: its grip sets it (island.rs panel_resize).
+        settings.panel_width = current.panel_width;
+        settings.panel_height = current.panel_height;
         // The Projects folder is the buddy's to set (code_pick_projects_folder).
         settings.projects_root = current.projects_root.clone();
         code::set_session_folders(settings.all_session_folders);
@@ -650,6 +653,8 @@ pub fn run() {
             set_system_languages,
             set_collapsed,
             set_island_rect,
+            island::panel_resize,
+            island::panel_side,
             focus_window,
             reposition,
             open_url,

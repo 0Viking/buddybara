@@ -14,9 +14,12 @@ use crate::platform::{self, cursor_physical, left_button_down};
 
 pub const WINDOW_LABEL: &str = "island";
 
-/// The panel, logical pixels: taller than wide, like an editor's side bar.
+/// The panel's usual size, logical pixels: taller than wide, like an editor's
+/// side bar. Its grip makes it bigger or smaller (panel_resize), down to MIN_*.
 pub const BUDDY_W: f64 = 600.0;
 pub const BUDDY_H: f64 = 660.0;
+const MIN_W: f64 = 420.0;
+const MIN_H: f64 = 360.0;
 /// Between Buddybara's window and the panel.
 const BUDDY_GAP: f64 = 6.0;
 /// Transparent room on each side of the panel inside its window, for the
@@ -293,7 +296,9 @@ fn place_panel(app: &AppHandle, collapsed: bool, following: bool) {
         let _ = win.set_position(PhysicalPosition::new(bx as i32, by as i32));
         return;
     }
-    let (pw, ph) = (BUDDY_W * scale, BUDDY_H * scale);
+    // The user's size, but never more than the work area holds.
+    let (lw, lh) = panel_size(app);
+    let (pw, ph) = ((lw * scale).min(ww), (lh * scale).min(wh));
     let (gap, neck) = (BUDDY_GAP * scale, BUDDY_NECK * scale);
     let at = |side: i8| if side < 0 { bx - gap - pw } else { bx + bw + gap };
     let fits = |side: i8| at(side) >= wx && at(side) + pw <= wx + ww;
@@ -324,6 +329,47 @@ fn place_panel(app: &AppHandle, collapsed: bool, following: bool) {
             }
         }
     }
+}
+
+/// The panel's size, logical px: the one its grip left, else the usual one.
+fn panel_size(app: &AppHandle) -> (f64, f64) {
+    let (w, h) = app.try_state::<crate::Shared>().map_or((0, 0), |s| {
+        let s = s.settings.lock().unwrap();
+        (s.panel_width, s.panel_height)
+    });
+    let pick = |v: u32, usual: f64, min: f64| if v == 0 { usual } else { (v as f64).max(min) };
+    (pick(w, BUDDY_W, MIN_W), pick(h, BUDDY_H, MIN_H))
+}
+
+/// The panel's grip (buddy.ts): its new size in logical px, the panel placed
+/// again around it at once. `done`: the drag is over, and the size is saved.
+#[tauri::command]
+pub fn panel_resize(app: AppHandle, width: f64, height: f64, done: bool) {
+    let Some(shared) = app.try_state::<crate::Shared>() else { return };
+    if !width.is_finite() || !height.is_finite() {
+        return;
+    }
+    let settings = {
+        let mut s = shared.settings.lock().unwrap();
+        s.panel_width = width.clamp(MIN_W, 8000.0).round() as u32;
+        s.panel_height = height.clamp(MIN_H, 8000.0).round() as u32;
+        s.clone()
+    };
+    if !shared.gate.collapsed.load(Ordering::Relaxed) {
+        place_panel(&app, false, true);
+    }
+    if done {
+        if let Err(err) = crate::settings::save(&settings) {
+            crate::log::line(format!("could not save the panel's size: {err}"));
+        }
+    }
+}
+
+/// Which side of Buddybara the open panel is on: -1 left, 1 right, 0 closed.
+/// The grip goes on the far corner.
+#[tauri::command]
+pub fn panel_side() -> i8 {
+    PANEL_SIDE.load(Ordering::Relaxed)
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here

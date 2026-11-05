@@ -5,7 +5,7 @@
 // into the panel itself. Everything is in the panel window's logical pixels:
 // the panel sits between two BUDDY_NECK margins (island.rs place_panel).
 
-import { BUDDY_H, BUDDY_NECK, BUDDY_W } from "../core/layout";
+import { BUDDY_NECK, panelSize } from "../core/layout";
 
 export interface Tip {
   x: number;
@@ -31,13 +31,15 @@ const smooth = (t: number) => {
  * `wrap` spans the whole window and takes the funnel's shape; `panel` slides.
  */
 export function genieFrame(wrap: HTMLElement, panel: HTMLElement, tip: Tip, p: number) {
+  // The panel as big as its grip left it.
+  const { w: width, h: height } = panelSize();
   const left = BUDDY_NECK;
-  const right = BUDDY_NECK + BUDDY_W;
+  const right = BUDDY_NECK + width;
   // Away from him, towards the panel's far side.
   const dir = tip.x > (left + right) / 2 ? -1 : 1;
   const near = Math.abs((dir < 0 ? right : left) - tip.x);
   const far = Math.abs((dir < 0 ? left : right) - tip.x);
-  const tipY = Math.min(BUDDY_H - NECK_HALF, Math.max(NECK_HALF, tip.y));
+  const tipY = Math.min(height - NECK_HALF, Math.max(NECK_HALF, tip.y));
   // First it slides out through the funnel, then the funnel straightens and
   // lets go of him; the two overlap a little.
   const slide = ease(clamp01(p / 0.62));
@@ -45,7 +47,7 @@ export function genieFrame(wrap: HTMLElement, panel: HTMLElement, tip: Tip, p: n
   const reach = slide * far;
   const start = settle * near;
   const flare = Math.max(1, (1 - settle) * far * 0.9);
-  const mid = BUDDY_H / 2;
+  const mid = height / 2;
   const top: string[] = [];
   const bottom: string[] = [];
   for (let i = 0; i <= STEPS; i++) {

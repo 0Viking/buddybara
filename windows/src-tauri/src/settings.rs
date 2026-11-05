@@ -59,6 +59,11 @@ pub struct Settings {
     /// of his usual size, one of desktop::logic::SIZES (50 to 200). Another
     /// number reads as the nearest of them.
     pub buddy_size: u32,
+    /// The panel's size in logical px, as its grip left it (island.rs
+    /// panel_resize); 0 is the usual size. Owned by the Rust side, like the
+    /// desktop Buddybara's spot.
+    pub panel_width: u32,
+    pub panel_height: u32,
     /// The model picked for each other chat provider in Settings → AI models,
     /// by provider id ("openai", "ollama"…).
     pub chat_models: BTreeMap<String, String>,
@@ -108,6 +113,8 @@ impl Default for Settings {
             theme_custom: BTreeMap::new(),
             text_size: 100,
             buddy_size: 100,
+            panel_width: 0,
+            panel_height: 0,
             chat_models: BTreeMap::new(),
             ollama_url: String::new(),
             lmstudio_url: String::new(),

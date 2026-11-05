@@ -221,6 +221,10 @@ export const Bridge = {
 
   /** Shrink the window down to the invisible wake strip (hidden) or back to full. */
   setCollapsed: (collapsed: boolean) => call<void>("set_collapsed", { collapsed }),
+  /** The panel's grip: its new size in logical px; `done` saves it (island.rs panel_resize). */
+  panelResize: (width: number, height: number, done: boolean) => call<void>("panel_resize", { width, height, done }),
+  /** Which side of Buddybara the open panel is on: -1 left, 1 right, 0 closed. */
+  panelSide: () => call<number>("panel_side"),
 
   /**
    * Pushes the island shape in window coordinates. Rust flips click-through from

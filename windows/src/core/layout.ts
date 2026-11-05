@@ -19,7 +19,13 @@ export type BotStateName =
 
 export type BotEmoteName = "love" | "surprised" | "proud" | "wink" | "yawn" | "happy" | "annoyed";
 
+/** The panel's usual size; its grip changes it, so what it is now is the window's (panelSize). */
 export const BUDDY_W = 600;
 export const BUDDY_H = 660;
 /** Transparent room each side of the panel in its window, for the genie's funnel (island.rs BUDDY_NECK). */
 export const BUDDY_NECK = 40;
+
+/** The panel's size as it is now: the window between its two necks. */
+export function panelSize(): { w: number; h: number } {
+  return { w: Math.max(0, window.innerWidth - 2 * BUDDY_NECK), h: window.innerHeight };
+}

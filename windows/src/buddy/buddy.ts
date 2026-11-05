@@ -18,7 +18,7 @@ import {
   type ChatDelta, type CodeProject, type CodeRunEvent, type CodeSession, type DragDropPayload, type DroppedFile,
   type SessionUsage, type SlashCommand,
 } from "../core/bridge";
-import { BUDDY_H, BUDDY_NECK, BUDDY_W, type AlertView } from "../core/layout";
+import { BUDDY_H, BUDDY_NECK, BUDDY_W, panelSize, type AlertView } from "../core/layout";
 import { Sound } from "../core/sound";
 import { State, type AskedQuestion } from "../core/state";
 import { DesktopLink } from "../island/desktop";
@@ -162,7 +162,8 @@ function sized(): Promise<void> {
   const until = performance.now() + 250;
   return new Promise((done) => {
     const check = () => {
-      if (window.innerWidth >= BUDDY_W || performance.now() > until) done();
+      // Folded, the window is one pixel: grown, it holds at least its necks and a panel.
+      if (window.innerWidth > 2 * BUDDY_NECK + 100 || performance.now() > until) done();
       else window.setTimeout(check, 16);
     };
     check();
@@ -434,7 +435,7 @@ export class Buddy {
         void this.sendBtw();
       }
     });
-    this.el = h("div", { id: "buddy" }, side, main, this.setup.el, this.projectMenu);
+    this.el = h("div", { id: "buddy" }, side, main, this.setup.el, this.projectMenu, this.panelGrip());
     this.projectMenu.addEventListener("contextmenu", (e) => e.preventDefault());
     this.list.addEventListener("scroll", () => this.closeProjectMenu());
     this.genie = h("div", { id: "genie" }, this.el);
@@ -601,8 +602,13 @@ export class Buddy {
     startServices(() => this.render(), (good) => this.desktop.emote(good ? "happy" : "surprised"));
     await logged("other models", onEvent<ChatDelta>("chat-delta", (d) => this.onDelta(d)));
     void this.refreshOtherKeys();
-    // The whole window is the panel: it takes the mouse wherever it is shown.
+    // The whole window is the panel: it takes the mouse wherever it is shown,
+    // as big as its grip makes it.
     void Bridge.setIslandRect(BUDDY_NECK, 0, BUDDY_W, BUDDY_H);
+    window.addEventListener("resize", () => {
+      const { w, h } = panelSize();
+      if (w > 100) void Bridge.setIslandRect(BUDDY_NECK, 0, w, h);
+    });
     void Bridge.setCollapsed(true);
     await logged("desktop Buddybara", this.desktop.init());
     this.desktop.launch();
@@ -749,6 +755,51 @@ export class Buddy {
     this.genie.classList.remove("pouring");
     genieClear(this.genie, this.el);
     if (!open) void Bridge.setCollapsed(true);
+    else void this.placeGrip();
+  }
+
+  /** The grip goes on the bottom corner away from Buddybara (island.rs panel_side). */
+  private async placeGrip() {
+    const side = await Bridge.panelSide().catch(() => null);
+    this.el.classList.toggle("grip-left", (side ?? 1) < 0);
+  }
+
+  /**
+   * The grip in the panel's bottom corner away from Buddybara: dragged, the
+   * panel grows or shrinks there (its side by him stays put); double-clicked,
+   * it is its usual size again.
+   */
+  private panelGrip(): HTMLElement {
+    const grip = h("div", { class: "b-panel-grip", title: t("Drag to resize") });
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      // Screen coordinates: the window moves under the pointer when the panel grows to the left.
+      const from = { x: e.screenX, y: e.screenY, ...panelSize() };
+      const dir = this.el.classList.contains("grip-left") ? -1 : 1;
+      let size = { w: from.w, h: from.h };
+      let queued = false;
+      const move = (ev: PointerEvent) => {
+        size = { w: from.w + dir * (ev.screenX - from.x), h: from.h + (ev.screenY - from.y) };
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          void Bridge.panelResize(size.w, size.h, false);
+        });
+      };
+      const up = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+        void Bridge.panelResize(size.w, size.h, true).then(() => this.placeGrip());
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
+    });
+    grip.addEventListener("dblclick", () => void Bridge.panelResize(BUDDY_W, BUDDY_H, true).then(() => this.placeGrip()));
+    return grip;
   }
 
   // ── Projects ────────────────────────────────────────────────────────────────
@@ -1026,6 +1077,12 @@ export class Buddy {
 
   /** One `claude -p` run for the conversation (code.rs send); `sent`: the lines it carries. */
   private async start(chat: Chat, prompt: string, attachments: string[], sent: Line[]) {
+    // A new conversation is named after its first line at once, as the list
+    // names it, not when it is opened again.
+    if (!chat.id && chat.title === t("New conversation")) {
+      const first = chat.lines.find((l) => l.role === "user")?.text.split("\n")[0].trim() ?? "";
+      if (first) chat.title = first.length > 60 ? `${first.slice(0, 57)}…` : first;
+    }
     if (chat.other) return this.startOther(chat);
     chat.failed = false;
     chat.stopped = false;
@@ -1903,10 +1960,6 @@ export class Buddy {
   /** One answer from the conversation's other model, then whatever was typed meanwhile. */
   private async startOther(chat: Chat) {
     const other = chat.other!;
-    if (!chat.id && chat.title === t("New conversation")) {
-      const first = chat.lines.find((l) => l.role === "user")?.text.split("\n")[0] ?? "";
-      if (first) chat.title = first.length > 60 ? `${first.slice(0, 57)}…` : first;
-    }
     chat.failed = false;
     chat.stopped = false;
     const run = ++this.nextOtherRun;

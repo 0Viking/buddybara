@@ -41,6 +41,46 @@
   pointer-events: auto;
 }
 
+/* The panel's grip (buddy.ts panelGrip): the bottom corner away from
+   Buddybara, inside the rounded corner. */
+.b-panel-grip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  z-index: 20;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+.b-panel-grip::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid color-mix(in srgb, var(--tint) calc(30% * var(--lines)), transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--tint) calc(30% * var(--lines)), transparent);
+  border-bottom-right-radius: calc(3px * var(--round));
+}
+
+#buddy.grip-left .b-panel-grip {
+  right: auto;
+  left: 3px;
+  cursor: nesw-resize;
+}
+
+#buddy.grip-left .b-panel-grip::after {
+  right: auto;
+  left: 4px;
+  border-right: 0;
+  border-left: 2px solid color-mix(in srgb, var(--side-ink, var(--tint)) calc(30% * var(--lines)), transparent);
+  border-bottom-color: color-mix(in srgb, var(--side-ink, var(--tint)) calc(30% * var(--lines)), transparent);
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: calc(3px * var(--round));
+}
+
 /* ── Projects ─────────────────────────────────────────────────────────────── */
 
 .b-side {
