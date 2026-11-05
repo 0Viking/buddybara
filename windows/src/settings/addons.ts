@@ -85,8 +85,9 @@ function askSkills(): Promise<void> {
   return askingSkills;
 }
 
-function askPlugins(): Promise<void> {
-  askingPlugins ??= Bridge.pluginsInstalled()
+/** `refresh`: the marketplaces are fetched again first, to know what is newer. */
+function askPlugins(refresh = false): Promise<void> {
+  askingPlugins ??= Bridge.pluginsInstalled(refresh)
     .then((list) => {
       plugins = list;
       pluginsError = "";
@@ -100,6 +101,17 @@ function askPlugins(): Promise<void> {
       askingPlugins = null;
     });
   return askingPlugins;
+}
+
+/** The marketplaces are fetched again at most this often, and when they last were. */
+const CHECK_MS = 10 * 60_000;
+let checkedAt = 0;
+
+/** What is installed asked again with the marketplaces fetched first, so Update shows where there is a newer version. */
+function checkUpdates(): Promise<void> {
+  if (Date.now() - checkedAt < CHECK_MS) return Promise.resolve();
+  checkedAt = Date.now();
+  return (askingPlugins ?? Promise.resolve()).then(() => askPlugins(true)).then(() => redrawPlugins?.());
 }
 
 /** One installed command: what it does, Use, and for the user's own Edit and Remove. */
@@ -226,12 +238,22 @@ function pluginCard(p: InstalledPlugin, redraw: () => void): HTMLElement {
   } else {
     const sw = toggle(p.enabled, (on) => void act(on ? "enable" : "disable"));
     sw.title = p.enabled ? t("On: Claude Code uses it") : t("Off: Claude Code leaves it out");
-    const update = h("button", { text: busy ? t("Working…") : t("Update") });
-    update.addEventListener("click", () => void act("update"));
-    const remove = h("button", { class: "danger", text: t("Uninstall") });
-    remove.addEventListener("click", () => void act("uninstall"));
-    for (const b of [sw, update, remove] as HTMLButtonElement[]) b.disabled = busy;
-    controls.push(sw, update, remove);
+    controls.push(sw);
+    // Synced from claude.ai: turned on and off here, updated and removed there.
+    if (p.scope === "synced") {
+      controls.push(h("span", { class: "hint", text: t("From your claude.ai account") }));
+    } else {
+      // Update only where a newer version is known (checkUpdates).
+      if (p.update) {
+        const update = h("button", { text: busy ? t("Working…") : t("Update") });
+        update.addEventListener("click", () => void act("update"));
+        controls.push(update);
+      }
+      const remove = h("button", { class: "danger", text: t("Uninstall") });
+      remove.addEventListener("click", () => void act("uninstall"));
+      controls.push(remove);
+    }
+    for (const b of controls) if (b instanceof HTMLButtonElement) b.disabled = busy;
   }
   const source = SOURCE[p.source] ? t(SOURCE[p.source]) : p.marketplace;
   const project = p.project.split(/[\\/]/).filter(Boolean).pop();
@@ -277,7 +299,9 @@ export function installedPlugins(query: string): HTMLElement {
     if (el.isConnected) draw();
   };
   draw();
-  if (!plugins || Date.now() - pluginsAt > FRESH_MS) void askPlugins().then(redrawPlugins);
+  // What is installed first, at once; then whether any of it is newer.
+  if (!plugins || Date.now() - pluginsAt > FRESH_MS) void askPlugins().then(redrawPlugins).then(checkUpdates);
+  else void checkUpdates();
   return el;
 }
 

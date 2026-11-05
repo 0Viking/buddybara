@@ -1080,6 +1080,8 @@ pub struct InstalledPlugin {
     scope: String,
     /// The project of a "project" or "local" install; empty otherwise.
     project: String,
+    /// A newer version is known (`Latest::newer`): Update shows only then.
+    update: bool,
 }
 
 /// The scopes `claude plugin <action> --scope` takes from Settings, and whether one belongs to a project.
@@ -1101,11 +1103,146 @@ fn source_of(marketplace: &str, scope: &str) -> &'static str {
     }
 }
 
+// Claude Code says what is installed, not what is newer: that is read from what
+// it keeps on disk for each kind of marketplace (~/.claude/plugins).
+
+fn plugins_dir() -> PathBuf {
+    code::config_dir().join("plugins")
+}
+
+/// What an installed plugin's newer version is told by, read once a list.
+#[derive(Default)]
+struct Latest {
+    /// installed_plugins.json: what each install came from (its commit, its claude.ai id).
+    records: Value,
+    /// known_marketplaces.json: where each marketplace Claude Code keeps a copy of is.
+    markets: Value,
+    /// The Directory as Claude Code last fetched it: installed name → (version, reviewed commit).
+    directory: HashMap<String, (String, String)>,
+    /// The claude.ai marketplaces as last synced: plugin id → version.
+    claudeai: HashMap<String, String>,
+}
+
+impl Latest {
+    fn read(dir: &Path) -> Latest {
+        let mut latest = Latest {
+            records: read_json(&dir.join("installed_plugins.json")).unwrap_or_default(),
+            markets: read_json(&dir.join("known_marketplaces.json")).unwrap_or_default(),
+            ..Default::default()
+        };
+        if let Some(cache) = read_json(&dir.join("plugin-directory-cache-v2.json")) {
+            let names = cache.get("entryNames").and_then(Value::as_object);
+            for x in cache.get("listings").and_then(Value::as_array).into_iter().flatten() {
+                let Some(name) = x.get("id").and_then(Value::as_str).and_then(|id| names?.get(id)?.as_str()) else { continue };
+                let at = |p: &str| x.pointer(p).and_then(Value::as_str).unwrap_or("").to_string();
+                latest.directory.insert(name.to_string(), (at("/release/version"), at("/source/repository/reviewed_commit")));
+            }
+        }
+        for account in std::fs::read_dir(dir.join("synced")).into_iter().flatten().flatten() {
+            for file in std::fs::read_dir(account.path()).into_iter().flatten().flatten() {
+                if !file.file_name().to_string_lossy().starts_with(".marketplace-") {
+                    continue;
+                }
+                let Some(market) = read_json(&file.path()) else { continue };
+                for row in market.get("rows").and_then(Value::as_array).into_iter().flatten() {
+                    if let (Some(id), Some(version)) = (row.get("id").and_then(Value::as_str), row.get("version").and_then(Value::as_str)) {
+                        latest.claudeai.insert(id.to_string(), version.to_string());
+                    }
+                }
+            }
+        }
+        latest
+    }
+
+    /// Whether `plugin` (an entry of `claude plugin list --json`) has a newer
+    /// version than the one installed. Not known is not newer: Update shows
+    /// only when it would bring something.
+    fn newer(&self, plugin: &Value) -> bool {
+        let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+        let (id, version, scope) = (text(plugin, "id"), text(plugin, "version"), text(plugin, "scope"));
+        // claude.ai updates what it syncs, the organization what it manages.
+        if version.is_empty() || matches!(scope.as_str(), "synced" | "managed") {
+            return false;
+        }
+        // Installed from a folder: Claude Code reads the folder's version itself.
+        if let Some(folder) = plugin.get("folderVersion").and_then(Value::as_str) {
+            return !folder.is_empty() && folder != version;
+        }
+        let Some((name, market)) = id.split_once('@') else { return false };
+        let record = self
+            .records
+            .pointer("/plugins")
+            .and_then(|p| p.get(&id))
+            .and_then(Value::as_array)
+            .and_then(|r| r.iter().find(|r| text(r, "scope") == scope && text(r, "projectPath") == text(plugin, "projectPath")))
+            .cloned()
+            .unwrap_or_default();
+        let commit = text(&record, "gitCommitSha");
+        if market == "anthropic-plugin-directory" {
+            let Some((latest, reviewed)) = self.directory.get(name) else { return false };
+            return if !reviewed.is_empty() && !commit.is_empty() {
+                *reviewed != commit
+            } else {
+                !latest.is_empty() && version.split('-').next() != Some(latest.as_str())
+            };
+        }
+        let claudeai = text(&record, "claudeaiPluginId");
+        if !claudeai.is_empty() {
+            return self.claudeai.get(&claudeai).is_some_and(|latest| *latest != version);
+        }
+        // A marketplace Claude Code keeps a copy of: the plugin's own plugin.json
+        // there if it is in it, else its entry.
+        let Some(dir) = self.markets.get(market).and_then(|m| m.get("installLocation")).and_then(Value::as_str) else { return false };
+        let dir = Path::new(dir);
+        let Some(manifest) = read_json(&dir.join(".claude-plugin").join("marketplace.json")) else { return false };
+        let Some(entry) = manifest.get("plugins").and_then(Value::as_array).and_then(|p| p.iter().find(|p| text(p, "name") == name)) else {
+            return false;
+        };
+        let source = entry.get("source").cloned().unwrap_or_default();
+        let folder = match source.as_str() {
+            Some(s) if s.trim().trim_start_matches("./").trim_matches('.').is_empty() => Some(dir.to_path_buf()),
+            Some(s) => inside(dir, s),
+            None => None,
+        };
+        let own = folder.and_then(|f| read_json(&f.join(".claude-plugin").join("plugin.json"))).map(|p| text(&p, "version"));
+        let latest = own.filter(|v| !v.is_empty()).unwrap_or_else(|| text(entry, "version"));
+        if !latest.is_empty() {
+            return latest != version;
+        }
+        let sha = text(&source, "sha");
+        !sha.is_empty() && !commit.is_empty() && sha != commit
+    }
+}
+
+/// The marketplaces Claude Code clones (from GitHub or a git link) that `list`'s
+/// plugins came from, fetched again: it only does that itself as it starts, and
+/// not for every marketplace.
+fn refresh_markets(markets: &Value, list: &[Value]) {
+    let used: HashSet<&str> = list.iter().filter_map(|v| v.get("id")?.as_str()?.split_once('@').map(|(_, m)| m)).collect();
+    for (name, m) in markets.as_object().into_iter().flatten() {
+        let cloned = matches!(m.pointer("/source/source").and_then(Value::as_str), Some("github" | "git" | "url"));
+        if cloned && used.contains(name.as_str()) && plain_name(name) {
+            if let Err(err) = mcp::claude(&["plugin", "marketplace", "update", name], LIST_LIMIT) {
+                crate::log::line(format!("addons: marketplace {name} not refreshed: {}", directory::message_of(err)));
+            }
+        }
+    }
+}
+
+/// `refresh`: the marketplaces are fetched again first, to know what is newer (a few seconds).
 #[tauri::command]
-pub async fn plugins_installed() -> Result<Vec<InstalledPlugin>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let out = mcp::claude(&["plugin", "list", "--json"], LIST_LIMIT).map_err(directory::message_of)?;
-        let list: Vec<Value> = serde_json::from_str(out.trim()).map_err(|_| t("Unexpected answer from Claude Code."))?;
+pub async fn plugins_installed(refresh: Option<bool>) -> Result<Vec<InstalledPlugin>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let ask = || -> Result<Vec<Value>, String> {
+            let out = mcp::claude(&["plugin", "list", "--json"], LIST_LIMIT).map_err(directory::message_of)?;
+            serde_json::from_str(out.trim()).map_err(|_| t("Unexpected answer from Claude Code."))
+        };
+        let mut list = ask()?;
+        if refresh == Some(true) {
+            refresh_markets(&Latest::read(&plugins_dir()).markets, &list);
+            list = ask()?;
+        }
+        let latest = Latest::read(&plugins_dir());
         let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         let mut plugins: Vec<InstalledPlugin> = list
             .iter()
@@ -1118,6 +1255,7 @@ pub async fn plugins_installed() -> Result<Vec<InstalledPlugin>, String> {
                 let scope = text(v, "scope");
                 let project = if project_scope(&scope) == Some(true) { text(v, "projectPath") } else { String::new() };
                 Some(InstalledPlugin {
+                    update: latest.newer(v),
                     source: source_of(&marketplace, &scope),
                     scope,
                     project,
@@ -1157,7 +1295,13 @@ pub async fn plugin_action(app: AppHandle, id: String, action: String, scope: Op
     if !matches!(action.as_str(), "enable" | "disable" | "update" | "uninstall") {
         return Err(format!("unknown action {action}"));
     }
-    let scope = scope.unwrap_or_else(|| "user".into());
+    let mut scope = scope.unwrap_or_else(|| "user".into());
+    if scope == "synced" {
+        if !matches!(action.as_str(), "enable" | "disable") {
+            return Err(t("This plugin comes from your claude.ai account: update or remove it there."));
+        }
+        scope = "user".into();
+    }
     let dir = match project_scope(&scope) {
         Some(false) => platform::home_dir(),
         Some(true) => {
@@ -1399,6 +1543,39 @@ mod tests {
         assert_eq!((name.as_str(), description.as_str()), ("team", "Team tools"));
         assert_eq!((plugins[0].commands.clone(), plugins[0].unknown, plugins[0].installed), (vec!["notes:today".to_string()], false, true));
         assert!(plugins[1].unknown && !plugins[1].installed);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_shows_only_where_a_newer_version_is_known() {
+        let dir = temp("latest");
+        let market = dir.join("marketplaces/kit");
+        write(&market.join(".claude-plugin/marketplace.json"), r#"{"name":"kit","plugins":[
+            {"name":"notes","source":"./","version":"1.0.1"},
+            {"name":"tools","source":"./tools"}]}"#);
+        write(&market.join("tools/.claude-plugin/plugin.json"), r#"{"name":"tools","version":"2.0.0"}"#);
+        let known = json!({"kit": {"source": {"source": "github", "repo": "x/kit"}, "installLocation": market}});
+        write(&dir.join("known_marketplaces.json"), &known.to_string());
+        write(&dir.join("installed_plugins.json"), r#"{"version":2,"plugins":{
+            "powers@anthropic-plugin-directory":[{"scope":"user","gitCommitSha":"aaa"}],
+            "notes@claudeai-team":[{"scope":"user","claudeaiPluginId":"plugin_1"}],
+            "tasks@claudeai-team":[{"scope":"user","claudeaiPluginId":"plugin_2"}]}}"#);
+        write(&dir.join("plugin-directory-cache-v2.json"), r#"{"entryNames":{"plugin_d":"powers"},"listings":[
+            {"id":"plugin_d","release":{"version":"6.4.2"},"source":{"repository":{"reviewed_commit":"bbb"}}}]}"#);
+        write(&dir.join("synced/org_account/.marketplace-marketplace_9.json"), r#"{"rows":[
+            {"id":"plugin_1","version":"0001"},{"id":"plugin_2","version":"0003"}]}"#);
+        let latest = Latest::read(&dir);
+        let newer = |plugin: Value| latest.newer(&plugin);
+        assert!(!newer(json!({"id": "notes@kit", "version": "1.0.1", "scope": "user"})));
+        assert!(newer(json!({"id": "tools@kit", "version": "1.9.0", "scope": "user"})));
+        assert!(newer(json!({"id": "powers@anthropic-plugin-directory", "version": "6.4.2-aaa", "scope": "user"})));
+        assert!(!newer(json!({"id": "notes@claudeai-team", "version": "0001", "scope": "user"})));
+        assert!(newer(json!({"id": "tasks@claudeai-team", "version": "0002", "scope": "user"})));
+        assert!(newer(json!({"id": "deploy@deploy", "version": "0.1.3", "folderVersion": "0.1.4", "scope": "user"})));
+        assert!(!newer(json!({"id": "deploy@deploy", "version": "0.1.3", "folderVersion": "0.1.3", "scope": "user"})));
+        // claude.ai keeps what it syncs up to date; what isn't known isn't newer.
+        assert!(!newer(json!({"id": "pack@synced", "version": "1.0.0", "scope": "synced"})));
+        assert!(!newer(json!({"id": "other@elsewhere", "version": "1.0.0", "scope": "user"})));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

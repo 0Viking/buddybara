@@ -5760,6 +5760,28 @@
    "pt-BR": "A pasta do projeto {path} não está mais lá.",
    "ru": "Папки проекта {path} там уже нет.",
    "id": "Folder proyek {path} sudah tidak ada."
+  },
+  "From your claude.ai account": {
+   "zh-Hans": "来自你的 claude.ai 账户",
+   "hi": "आपके claude.ai खाते से",
+   "es": "De tu cuenta de claude.ai",
+   "ar": "من حسابك على claude.ai",
+   "fr": "Depuis votre compte claude.ai",
+   "bn": "আপনার claude.ai অ্যাকাউন্ট থেকে",
+   "pt-BR": "Da sua conta do claude.ai",
+   "ru": "Из вашего аккаунта claude.ai",
+   "id": "Dari akun claude.ai Anda"
+  },
+  "This plugin comes from your claude.ai account: update or remove it there.": {
+   "zh-Hans": "此插件来自你的 claude.ai 账户：请在那里更新或移除。",
+   "hi": "यह प्लगइन आपके claude.ai खाते से आता है: इसे वहीं अपडेट करें या हटाएँ।",
+   "es": "Este plugin viene de tu cuenta de claude.ai: actualízalo o quítalo allí.",
+   "ar": "تأتي هذه الإضافة من حسابك على claude.ai: حدّثها أو أزلها هناك.",
+   "fr": "Ce plugin vient de votre compte claude.ai : mettez-le à jour ou supprimez-le là-bas.",
+   "bn": "এই প্লাগইনটি আপনার claude.ai অ্যাকাউন্ট থেকে আসে: সেখানেই আপডেট করুন বা সরান।",
+   "pt-BR": "Este plugin vem da sua conta do claude.ai: atualize ou remova por lá.",
+   "ru": "Этот плагин из вашего аккаунта claude.ai: обновите или удалите его там.",
+   "id": "Plugin ini berasal dari akun claude.ai Anda: perbarui atau hapus di sana."
   }
  }
 }

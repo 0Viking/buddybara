@@ -137,6 +137,8 @@ export interface InstalledPlugin {
   scope: string;
   /** The project of a "project" or "local" install; empty otherwise. */
   project: string;
+  /** A newer version is known: Update shows only then. */
+  update: boolean;
 }
 
 export interface MySkill {
@@ -322,7 +324,8 @@ export const Bridge = {
   /** One plugin of a marketplace that was looked inside or added. */
   addonInstallFrom: (id: string, plugin: string, trust: boolean) =>
     callOrThrow<string[]>("addon_install_from", { id, plugin, trust }),
-  pluginsInstalled: () => callOrThrow<InstalledPlugin[]>("plugins_installed"),
+  /** `refresh`: the marketplaces are fetched again first, to know what is newer (a few seconds). */
+  pluginsInstalled: (refresh = false) => callOrThrow<InstalledPlugin[]>("plugins_installed", { refresh }),
   /** On, off, update or uninstall an installed plugin: by its `name@marketplace`, in its scope (and project). */
   pluginAction: (p: Pick<InstalledPlugin, "id" | "scope" | "project">, action: "enable" | "disable" | "update" | "uninstall") =>
     callOrThrow<void>("plugin_action", { id: p.id, action, scope: p.scope, project: p.project || null }),
