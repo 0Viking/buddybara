@@ -334,6 +334,12 @@ pub fn find_on_path(stem: &str) -> Option<PathBuf> {
         })
 }
 
+/// Windows reads the PATH saved since this process started; Linux has no such
+/// place (a shell's profile isn't one): the usual spots are looked at instead.
+pub fn find_on_saved_path(_stem: &str) -> Option<PathBuf> {
+    None
+}
+
 // ── Session windows ("Open terminal") ─────────────────────────────────────────
 //
 // Finding and raising a session's window lives in linux_focus.rs. There is no

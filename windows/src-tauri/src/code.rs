@@ -932,9 +932,12 @@ pub fn end_all() {
 }
 
 /// `claude`, from %PATH% or where its installer or winget puts it: installed
-/// while Buddybara runs, it is on a PATH this process started too early to see.
+/// while Buddybara runs (the first-run screen's Install), it is on a PATH this
+/// process started too early to see, so the PATH saved since is looked at too.
+/// winget may not make a link in WinGet\Links: it puts its package folder on
+/// that PATH instead.
 pub(crate) fn claude_exe() -> Option<PathBuf> {
-    platform::find_on_path("claude").or_else(|| {
+    platform::find_on_path("claude").or_else(|| platform::find_on_saved_path("claude")).or_else(|| {
         let exe = if cfg!(windows) { "claude.exe" } else { "claude" };
         let native = platform::home_dir().join(".local").join("bin").join(exe);
         let winget = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join(r"Microsoft\WinGet\Links\claude.exe"));

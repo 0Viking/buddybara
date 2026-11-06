@@ -8,7 +8,8 @@ use std::process::Command;
 
 use tauri::{AppHandle, Manager, WebviewWindow};
 
-use ::windows::core::{BOOL, PWSTR};
+use ::windows::core::{w, BOOL, PCWSTR, PWSTR};
+use ::windows::Win32::System::Registry::{RegGetValueW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ};
 use ::windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, HWND, LPARAM, LocalFree, POINT};
 use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
@@ -333,9 +334,28 @@ fn pick(owner: Option<isize>, start: Option<PathBuf>, file: Option<(&str, &str)>
 /// Rust quotes arguments correctly for `.cmd`/`.bat` targets since 1.77, so
 /// spawning `code.cmd` directly is safe.
 pub fn find_on_path(stem: &str) -> Option<PathBuf> {
+    find_in(stem, std::env::split_paths(&std::env::var_os("PATH")?))
+}
+
+/// The same, on the PATH Windows has saved for this user and this machine as
+/// it is now (what a console opened now gets): a program installed after
+/// Buddybara started, winget's Claude Code among them, is on it, not on the
+/// PATH this process inherited.
+pub fn find_on_saved_path(stem: &str) -> Option<PathBuf> {
+    let dirs: Vec<PathBuf> = [
+        (HKEY_CURRENT_USER, w!("Environment")),
+        (HKEY_LOCAL_MACHINE, w!(r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment")),
+    ]
+    .into_iter()
+    .filter_map(|(key, sub)| saved_value(key, sub, w!("Path")))
+    .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+    .collect();
+    find_in(stem, dirs)
+}
+
+fn find_in(stem: &str, dirs: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    let dirs = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&dirs) {
+    for dir in dirs {
         for ext in exts.split(';').filter(|e| !e.is_empty()) {
             let candidate = dir.join(format!("{stem}{}", ext.to_lowercase()));
             if candidate.is_file() {
@@ -344,6 +364,24 @@ pub fn find_on_path(stem: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// A string value under `key\sub`, its %VARIABLES% expanded (RegGetValueW does that).
+fn saved_value(key: HKEY, sub: PCWSTR, name: PCWSTR) -> Option<String> {
+    let flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ;
+    let mut bytes = 0u32;
+    // SAFETY: the first call only asks the size; the second writes at most `bytes` into `buf`.
+    unsafe {
+        if RegGetValueW(key, sub, name, flags, None, None, Some(&mut bytes)).is_err() || bytes == 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; (bytes as usize).div_ceil(2)];
+        if RegGetValueW(key, sub, name, flags, None, Some(buf.as_mut_ptr().cast()), Some(&mut bytes)).is_err() {
+            return None;
+        }
+        let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Some(String::from_utf16_lossy(&buf[..len]))
+    }
 }
 
 // ── Who we are ────────────────────────────────────────────────────────────────
